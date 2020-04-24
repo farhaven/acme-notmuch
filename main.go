@@ -164,7 +164,6 @@ func displayThread(threadID string) {
 
 	win.Clear()
 
-	// TODO: PrintTabbed?
 	entries := thread.Tree(0)
 	longestcommon.TrimPrefix(entries)
 	win.PrintTabbed(strings.Join(entries, "\n"))
