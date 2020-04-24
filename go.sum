@@ -1,0 +1,4 @@
+9fans.net/go v0.0.2 h1:RYM6lWITV8oADrwLfdzxmt8ucfW6UtP9v1jg4qAbqts=
+9fans.net/go v0.0.2/go.mod h1:lfPdxjq9v8pVQXUMBCx5EO5oLXWQFlKRQgs1kEkjoIM=
+github.com/jpillora/longestcommon v0.0.0-20161227235612-adb9d91ee629 h1:1dSBUfGlorLAua2CRx0zFN7kQsTpE2DQSmr7rrTNgY8=
+github.com/jpillora/longestcommon v0.0.0-20161227235612-adb9d91ee629/go.mod h1:mb5nS4uRANwOJSZj8rlCWAfAcGi72GGMIXx+xGOjA7M=
