@@ -13,6 +13,7 @@ func displayMessage(messageID string) {
 	// - Handle HTML mail
 	// - "Attachments" command
 	//   - opens a new window with the attachments (MIME parts) listed, allows saving them somewhere
+	//   - Decode base64
 	// - Only show interesting headers by default
 	//   - To, From, Date, Cc, Bcc, Reply-To
 	//   - Also show tags
