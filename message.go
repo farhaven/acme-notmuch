@@ -1,12 +1,71 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"os/exec"
+	"strings"
 	"sync"
+	"time"
 
 	"9fans.net/go/acme"
 )
+
+func writeMessageBody(win *acme.Win, msg *mail.Message) error {
+	mediaType, mediaParams, err := mime.ParseMediaType(msg.Header.Get("content-type"))
+	if err != nil {
+		log.Printf("can't determine media type. using text/plain: %s", err)
+		mediaType = "text/plain"
+	}
+
+	log.Println("mediatype", mediaType)
+	log.Println("params", mediaParams)
+
+	if strings.HasPrefix(mediaType, "multipart/") {
+		reader := multipart.NewReader(msg.Body, mediaParams["boundary"])
+
+		for {
+			p, err := reader.NextPart()
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				return err
+			}
+
+			body, err := ioutil.ReadAll(p)
+			if err != nil {
+				return err
+			}
+
+			err = win.Fprintf("body", "\nPart headers: %v\n\n%s", p.Header, body)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	body, err := ioutil.ReadAll(msg.Body)
+	if err != nil {
+		return err
+	}
+
+	err = win.Fprintf("body", "\n%s", body)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
@@ -52,10 +111,82 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	win.Clear()
 
-	err = win.Fprintf("data", "%s", output)
+	msg, err := mail.ReadMessage(bytes.NewBuffer(output))
 	if err != nil {
-		log.Printf("can't write data to window: %s", err)
-		return
+		// Parsing failed, just dump the content out as is
+		prefix := "Can't parse message:"
+		err = win.Fprintf("data", "%s: %s\n\n%s", prefix, err, output)
+		if err != nil {
+			log.Printf("can't write data to window: %s", err)
+			return
+		}
+	} else {
+		log.Println("Headers:", msg.Header)
+
+		var errs []error
+
+		date, err := msg.Header.Date()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("can't read date: %w", err))
+			date = time.Unix(0, 0)
+		}
+
+		headers := []string{"Date:\t" + date.Format(time.RFC3339)}
+
+		addrHeaders := []string{"from", "to", "cc", "bcc"}
+		for _, hdr := range addrHeaders {
+			addrs, err := msg.Header.AddressList(hdr)
+			if err != nil {
+				if err == mail.ErrHeaderNotPresent {
+					continue
+				}
+
+				log.Printf("can't read address header %q: %s", hdr, err)
+				return
+			}
+
+			var vals []string
+
+			for _, addr := range addrs {
+				vals = append(vals, addr.String())
+			}
+
+			headers = append(headers, strings.Title(hdr)+":\t"+strings.Join(vals, ", "))
+		}
+
+		moreHeaders := []string{"reply-to", "list-id", "x-bogosity", "content-type", "subject"}
+		for _, hdr := range moreHeaders {
+			val := msg.Header.Get(hdr)
+
+			if val == "" {
+				continue
+			}
+
+			headers = append(headers, strings.Title(hdr)+":\t"+val)
+		}
+
+		if len(errs) != 0 {
+			err = win.Fprintf("body", "Errors during processing:\n")
+			if err != nil {
+				log.Printf("can't write data to window: %s", err)
+				return
+			}
+			for _, err := range errs {
+				err = win.Fprintf("body", "%s\n", err.Error())
+				if err != nil {
+					log.Printf("can't write data to window: %s", err)
+					return
+				}
+			}
+		}
+
+		win.PrintTabbed(strings.Join(headers, "\n"))
+
+		err = writeMessageBody(win, msg)
+		if err != nil {
+			log.Printf("can't write message body: %s", err)
+			return
+		}
 	}
 
 	err = win.Ctl("clean")
