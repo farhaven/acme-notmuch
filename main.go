@@ -28,9 +28,13 @@ package main
 */
 
 import (
+	"errors"
 	"flag"
 	"log"
+	"strings"
 	"sync"
+
+	"9fans.net/go/acme"
 )
 
 const _maxSubjectLen = 60
@@ -42,6 +46,43 @@ var (
 
 func init() {
 	flag.StringVar(&_query, "query", "tag:unread and not tag:openbsd", "initial query")
+}
+
+var errNotAQuery = errors.New("not a query event")
+
+func handleQueryEvent(wg *sync.WaitGroup, evt *acme.Event) error {
+	cmd := strings.TrimSpace(string(evt.Text))
+	arg := strings.TrimSpace(string(evt.Arg))
+
+	log.Printf("cmd: %q, arg: %q", cmd, arg)
+
+	if cmd != "Query" && !strings.HasPrefix(cmd, "Query ") {
+		return errNotAQuery
+	}
+
+	log.Println("discovering args")
+
+	if arg == "" {
+		parts := strings.SplitN(cmd, " ", 2)
+		log.Printf("parts: %#v", parts)
+
+		if len(parts) != 2 {
+			return errNotAQuery
+		}
+
+		arg = parts[1]
+	}
+
+	log.Printf("got arg: %q", arg)
+
+	go func() {
+		err := displayQueryResult(wg, arg)
+		if err != nil {
+			log.Printf("can't display query results: %s", err)
+		}
+	}()
+
+	return nil
 }
 
 func main() {

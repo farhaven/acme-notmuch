@@ -115,6 +115,11 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		return
 	}
 
+	err = win.Fprintf("tag", "Query ")
+	if err != nil {
+		return
+	}
+
 	err = win.Fprintf("data", "Looking for thread %s", threadID)
 	if err != nil {
 		log.Printf("can't write to body: %s", err)
@@ -159,11 +164,20 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		switch evt.C2 {
 		case 'l', 'L':
 		case 'x', 'X':
-			err := win.WriteEvent(evt)
-			if err != nil {
-				log.Printf("can't write event: %s", err)
-				return
+			err := handleQueryEvent(wg, evt)
+			switch err {
+			case nil:
+				// Nothing to do, event already handled
+			case errNotAQuery:
+				// Let ACME handle the event
+				err := win.WriteEvent(evt)
+				if err != nil {
+					return
+				}
+			default:
+				log.Printf("can't handle event: %s", err)
 			}
+
 			continue
 		default:
 			continue

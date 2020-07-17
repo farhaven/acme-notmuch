@@ -89,9 +89,14 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		return
 	}
 
-	err = win.Name("Mail/thread/%s", messageID)
+	err = win.Name("Mail/message/%s", messageID)
 	if err != nil {
 		log.Printf("can't set window name for %s: %s", messageID, err)
+		return
+	}
+
+	err = win.Fprintf("tag", "Query ")
+	if err != nil {
 		return
 	}
 
@@ -195,5 +200,35 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		return
 	}
 
-	// TODO: Listen for some commands
+	for evt := range win.EventChan() {
+		// Only listen to l and L events to catch right click on a thread ID
+		// x and X go right back to acme
+		switch evt.C2 {
+		case 'x', 'X':
+			err := handleQueryEvent(wg, evt)
+			switch err {
+			case nil:
+				// Nothing to do, event already handled
+			case errNotAQuery:
+				// Let ACME handle the event
+				err := win.WriteEvent(evt)
+				if err != nil {
+					return
+				}
+			default:
+				log.Printf("can't handle event: %s", err)
+			}
+
+			continue
+		case 'l', 'L':
+			err := win.WriteEvent(evt)
+			if err != nil {
+				log.Printf("can't write event: %s", err)
+				return
+			}
+
+		default:
+			continue
+		}
+	}
 }

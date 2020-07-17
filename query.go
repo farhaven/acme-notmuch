@@ -55,6 +55,11 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		return err
 	}
 
+	err = win.Fprintf("tag", "Query ")
+	if err != nil {
+		return err
+	}
+
 	// TODO: Double check output=summary
 	cmd := exec.Command("notmuch", "search", "--output=summary", "--format=json", query)
 
@@ -89,10 +94,20 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		switch evt.C2 {
 		case 'l', 'L':
 		case 'x', 'X':
-			err := win.WriteEvent(evt)
-			if err != nil {
-				return err
+			err := handleQueryEvent(wg, evt)
+			switch err {
+			case nil:
+				// Nothing to do, event already handled
+			case errNotAQuery:
+				// Let ACME handle the event
+				err := win.WriteEvent(evt)
+				if err != nil {
+					return err
+				}
+			default:
+				log.Printf("can't handle event: %s", err)
 			}
+
 			continue
 		default:
 			continue
