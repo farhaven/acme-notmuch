@@ -3,11 +3,12 @@ package main
 import (
 	"log"
 	"os/exec"
+	"sync"
 
 	"9fans.net/go/acme"
 )
 
-func displayMessage(messageID string) {
+func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
 	// - MIME multipart
 	// - Handle HTML mail
@@ -17,6 +18,11 @@ func displayMessage(messageID string) {
 	// - Only show interesting headers by default
 	//   - To, From, Date, Cc, Bcc, Reply-To
 	//   - Also show tags
+	//   - Add "Headers" command to show full list of headers
+	// - "Next unread" command for next unread message in thread
+	// - Remove "unread" tag from messages
+
+	defer wg.Done()
 
 	win, err := acme.New()
 	if err != nil {

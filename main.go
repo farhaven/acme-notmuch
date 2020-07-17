@@ -28,18 +28,34 @@ package main
 */
 
 import (
+	"flag"
 	"log"
+	"sync"
 )
 
 const _maxSubjectLen = 60
 
+var (
+	_mainWG sync.WaitGroup
+	_query  string
+)
+
+func init() {
+	flag.StringVar(&_query, "query", "tag:unread and not tag:openbsd", "initial query")
+}
+
 func main() {
+	flag.Parse()
+
 	log.Println("here we go")
 
-	err := displayQueryResult("tag:unread and not tag:openbsd")
+	_mainWG.Add(1)
+
+	err := displayQueryResult(&_mainWG, _query)
 	if err != nil {
 		log.Panicf("can't run query: %s", err)
 	}
 
+	_mainWG.Wait()
 	log.Println("bye")
 }

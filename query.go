@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 
 	"9fans.net/go/acme"
 )
@@ -36,7 +37,9 @@ func (q QueryResult) String() string {
 var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
 
 // displayQueryResult opens a new window that shows the results of query
-func displayQueryResult(query string) error {
+func displayQueryResult(wg *sync.WaitGroup, query string) error {
+	defer wg.Done()
+
 	win, err := acme.New()
 	if err != nil {
 		return err
@@ -109,8 +112,9 @@ func displayQueryResult(query string) error {
 			continue
 		}
 
+		wg.Add(1)
 		// Open thread in new window
-		go displayThread(string(id))
+		go displayThread(wg, string(id))
 	}
 
 	return nil

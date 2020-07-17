@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 
 	"9fans.net/go/acme"
 	"github.com/jpillora/longestcommon"
@@ -99,7 +100,9 @@ func (t ThreadMessage) Tree(indent int) []string {
 // TODO: Check if this is completely correct
 var _messageIDRegex = regexp.MustCompile(`[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-z]+`)
 
-func displayThread(threadID string) {
+func displayThread(wg *sync.WaitGroup, threadID string) {
+	defer wg.Done()
+
 	win, err := acme.New()
 	if err != nil {
 		log.Printf("can't open thread display window for %s: %s", threadID, err)
@@ -118,7 +121,6 @@ func displayThread(threadID string) {
 		return
 	}
 
-	// notmuch show --body=false --format=json thread:0000000000035355
 	cmd := exec.Command("notmuch", "show", "--body=false", "--format=json", "thread:"+threadID)
 
 	output, err := cmd.CombinedOutput()
@@ -182,7 +184,8 @@ func displayThread(threadID string) {
 			continue
 		}
 
+		wg.Add(1)
 		// Open thread in new window
-		go displayMessage(string(id))
+		go displayMessage(wg, string(id))
 	}
 }
