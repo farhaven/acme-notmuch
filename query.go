@@ -11,6 +11,8 @@ import (
 	"sync"
 )
 
+const _maxSubjectLen = 60
+
 type QueryResult struct {
 	Thread       string
 	Timestamp    int    // Unix timestamp

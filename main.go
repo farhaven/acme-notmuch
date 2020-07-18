@@ -37,8 +37,6 @@ import (
 	"9fans.net/go/acme"
 )
 
-const _maxSubjectLen = 60
-
 var (
 	_query string
 )
