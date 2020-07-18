@@ -45,20 +45,17 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		return err
 	}
 
-	err = win.Fprintf("data", "Running query %s", query)
+	err = win.Fprintf("data", "Results of query %q\n\n", query)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Double check output=summary
 	cmd := exec.Command("notmuch", "search", "--output=summary", "--format=json", query)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
 	}
-
-	win.Clear()
 
 	var results []QueryResult
 	err = json.Unmarshal(output, &results)
