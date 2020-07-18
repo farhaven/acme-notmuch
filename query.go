@@ -50,12 +50,12 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		return err
 	}
 
-	err = win.Fprintf("data", "Running query %s", query)
+	err = win.Fprintf("tag", "Query ")
 	if err != nil {
 		return err
 	}
 
-	err = win.Fprintf("tag", "Query ")
+	err = win.Fprintf("data", "Running query %s", query)
 	if err != nil {
 		return err
 	}
