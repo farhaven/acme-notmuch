@@ -119,7 +119,7 @@ func handleQueryEvent(wg *sync.WaitGroup, evt *acme.Event) error {
 	go func() {
 		err := displayQueryResult(wg, arg)
 		if err != nil {
-			log.Printf("can't display query results: %s", err)
+			log.Printf("can't display query results for %q: %s", arg, err)
 		}
 	}()
 
