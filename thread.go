@@ -180,7 +180,7 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 	// longestcommon.TrimPrefix(entries)
 	win.PrintTabbed(strings.Join(entries, "\n"))
 
-	err = win.Ctl("clean")
+	err = winClean(win)
 	if err != nil {
 		log.Printf("can't clean window state: %s", err)
 		return

@@ -73,7 +73,7 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 
 	win.PrintTabbed(strings.Join(res, "\n"))
 
-	err = win.Ctl("clean")
+	err = winClean(win)
 	if err != nil {
 		return err
 	}

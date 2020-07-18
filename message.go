@@ -183,7 +183,7 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		}
 	}
 
-	err = win.Ctl("clean")
+	err = winClean(win)
 	if err != nil {
 		log.Printf("can't clean window state: %s", err)
 		return

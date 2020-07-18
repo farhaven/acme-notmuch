@@ -64,6 +64,31 @@ func newWin(name string) (*acme.Win, error) {
 	return win, nil
 }
 
+// winClean clears win's "dirty" flag and jumps to :0.
+func winClean(win *acme.Win) error {
+	err := win.Ctl("clean")
+	if err != nil {
+		return err
+	}
+
+	err = win.Addr("0")
+	if err != nil {
+		return err
+	}
+
+	err = win.Ctl("dot=addr")
+	if err != nil {
+		return err
+	}
+
+	err = win.Ctl("show")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 var errNotAQuery = errors.New("not a query event")
 
 func handleQueryEvent(wg *sync.WaitGroup, evt *acme.Event) error {
