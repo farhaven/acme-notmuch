@@ -40,8 +40,7 @@ import (
 const _maxSubjectLen = 60
 
 var (
-	_mainWG sync.WaitGroup
-	_query  string
+	_query string
 )
 
 func init() {
@@ -90,13 +89,14 @@ func main() {
 
 	log.Println("here we go")
 
-	_mainWG.Add(1)
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	err := displayQueryResult(&_mainWG, _query)
+	err := displayQueryResult(&wg, _query)
 	if err != nil {
 		log.Panicf("can't run query: %s", err)
 	}
 
-	_mainWG.Wait()
+	wg.Wait()
 	log.Println("bye")
 }
