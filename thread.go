@@ -42,9 +42,17 @@ func (i IDMap) Get(id string) (string, error) {
 	return val, nil
 }
 
+type TagSet struct {
+	MsgID string
+	Tags  map[string]bool
+}
+
 type ThreadEntry interface {
 	// Tree renders a tread entry of the given level as a list of strings. It places message IDs in the given IDMap.
 	Tree(int, *IDMap) []string
+
+	// PreOrder returns a traversal of the thread entry in pre-order.
+	PreOrder() []TagSet
 }
 
 // A thread is a list of child threads or messages
@@ -98,6 +106,17 @@ func (t *Thread) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// PreOrder flattens t to pre-order traversal, returning a list of message IDs and tags
+func (t Thread) PreOrder() []TagSet {
+	var ret []TagSet
+
+	for _, entry := range t {
+		ret = append(ret, entry.PreOrder()...)
+	}
+
+	return ret
+}
+
 type ThreadMessage struct {
 	ID           string
 	Match        bool
@@ -139,6 +158,18 @@ func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
 	log.Println("res", res)
 
 	return res
+}
+
+func (t ThreadMessage) PreOrder() []TagSet {
+	tags := make(map[string]bool)
+
+	for _, tag := range t.Tags {
+		tags[tag] = true
+	}
+
+	return []TagSet{
+		{MsgID: t.ID, Tags: tags},
+	}
 }
 
 func displayThread(wg *sync.WaitGroup, threadID string) {

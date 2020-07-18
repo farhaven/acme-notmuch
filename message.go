@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -67,6 +69,84 @@ func writeMessageBody(win *acme.Win, msg *mail.Message) error {
 	return nil
 }
 
+// nextUnread returns the message ID of the next unread message in the same thread as id
+func nextUnread(wg *sync.WaitGroup, id string) error {
+	// Get thread ID of the given message
+	// TODO: Handle multiple threads
+
+	cmd := exec.Command("notmuch", "search", "--format=json", "--output=threads", "id:"+id)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	var threadIDs []string
+	err = json.Unmarshal(output, &threadIDs)
+	if err != nil {
+		return err
+	}
+
+	if len(threadIDs) == 0 {
+		return errors.New("can't find thread for message")
+	} else if len(threadIDs) > 1 {
+		return errors.New("more than one thread id for message")
+	}
+
+	// Get thread for the message
+	cmd = exec.Command("notmuch", "show", "--format=json", "--body=false", "thread:"+threadIDs[0])
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	var thread Thread
+	err = json.Unmarshal(output, &thread)
+	if err != nil {
+		return err
+	}
+
+	l := thread.PreOrder()
+
+	buf, err := json.MarshalIndent(&l, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	log.Println("pre-order traversal of thread:", string(buf))
+
+	foundThisMsg := false
+	foundNextMsg := false
+	for idx, entry := range l {
+		if entry.MsgID == id {
+			log.Println("found message", id, "at index", idx)
+			foundThisMsg = true
+			continue
+		}
+
+		if !foundThisMsg {
+			continue
+		}
+
+		if entry.Tags["unread"] {
+			log.Println("next unread message is:", entry.MsgID, "at", idx)
+			wg.Add(1)
+			go displayMessage(wg, entry.MsgID)
+			foundNextMsg = true
+			break
+		}
+	}
+
+	if !foundThisMsg {
+		return errors.New("current message not found in thread")
+	}
+
+	if !foundNextMsg {
+		return errors.New("no next message found")
+	}
+
+	return nil
+}
+
 func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
 	// - MIME multipart
@@ -87,6 +167,13 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 	if err != nil {
 		log.Printf("can't open message display window for %s: %s", messageID, err)
 		return
+	}
+
+	err = win.Fprintf("tag", "Next ")
+	if err != nil {
+		log.Printf("can't write to tag: %s", err)
+		return
+
 	}
 
 	err = win.Fprintf("data", "Looking for message %s", messageID)
@@ -194,6 +281,15 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		// x and X go right back to acme
 		switch evt.C2 {
 		case 'x', 'X':
+			if string(evt.Text) == "Next" {
+				log.Println("got Next command")
+				err := nextUnread(wg, messageID)
+				if err != nil {
+					log.Printf("can't jump to next unread message: %s", err)
+				}
+				continue
+			}
+
 			err := handleQueryEvent(wg, evt)
 			switch err {
 			case nil:
