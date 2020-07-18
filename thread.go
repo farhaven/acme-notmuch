@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"9fans.net/go/acme"
 )
 
 // IDMap is used to map message IDs to shorter identifier strings and back.
@@ -146,20 +144,9 @@ func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
 func displayThread(wg *sync.WaitGroup, threadID string) {
 	defer wg.Done()
 
-	win, err := acme.New()
+	win, err := newWin("Mail/thread/" + threadID)
 	if err != nil {
 		log.Printf("can't open thread display window for %s: %s", threadID, err)
-		return
-	}
-
-	err = win.Name("Mail/thread/%s", threadID)
-	if err != nil {
-		log.Printf("can't set window name for %s: %s", threadID, err)
-		return
-	}
-
-	err = win.Fprintf("tag", "Query ")
-	if err != nil {
 		return
 	}
 

@@ -9,8 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-
-	"9fans.net/go/acme"
 )
 
 type QueryResult struct {
@@ -40,17 +38,7 @@ var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
 func displayQueryResult(wg *sync.WaitGroup, query string) error {
 	defer wg.Done()
 
-	win, err := acme.New()
-	if err != nil {
-		return err
-	}
-
-	err = win.Name("Mail/query")
-	if err != nil {
-		return err
-	}
-
-	err = win.Fprintf("tag", "Query ")
+	win, err := newWin("Mail/query")
 	if err != nil {
 		return err
 	}

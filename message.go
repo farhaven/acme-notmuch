@@ -83,20 +83,9 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	defer wg.Done()
 
-	win, err := acme.New()
+	win, err := newWin("Mail/message/" + messageID)
 	if err != nil {
 		log.Printf("can't open message display window for %s: %s", messageID, err)
-		return
-	}
-
-	err = win.Name("Mail/message/%s", messageID)
-	if err != nil {
-		log.Printf("can't set window name for %s: %s", messageID, err)
-		return
-	}
-
-	err = win.Fprintf("tag", "Query ")
-	if err != nil {
 		return
 	}
 

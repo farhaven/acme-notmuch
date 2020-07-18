@@ -47,6 +47,25 @@ func init() {
 	flag.StringVar(&_query, "query", "tag:unread and not tag:openbsd", "initial query")
 }
 
+func newWin(name string) (*acme.Win, error) {
+	win, err := acme.New()
+	if err != nil {
+		return nil, err
+	}
+
+	err = win.Name(name)
+	if err != nil {
+		return nil, err
+	}
+
+	err = win.Fprintf("tag", "Query ")
+	if err != nil {
+		return nil, err
+	}
+
+	return win, nil
+}
+
 var errNotAQuery = errors.New("not a query event")
 
 func handleQueryEvent(wg *sync.WaitGroup, evt *acme.Event) error {
