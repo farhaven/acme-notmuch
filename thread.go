@@ -5,27 +5,58 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/mail"
 	"os/exec"
-	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"9fans.net/go/acme"
-	"github.com/jpillora/longestcommon"
 )
 
+// IDMap is used to map message IDs to shorter identifier strings and back.
+// This structure and its methods are not goroutine safe.
+type IDMap struct {
+	Prefix string
+	Count  int
+	Vals   map[string]string
+}
+
+// Put places val in i and returns an identifier that can be used to get val back
+func (i *IDMap) Put(val string) string {
+	if i.Vals == nil {
+		i.Vals = make(map[string]string)
+	}
+
+	id := i.Prefix + strconv.Itoa(i.Count)
+	i.Count += 1
+	i.Vals[id] = val
+	return id
+}
+
+// Get returns a previously allocated value from i
+func (i IDMap) Get(id string) (string, error) {
+	val, ok := i.Vals[id]
+	if !ok {
+		return "", fmt.Errorf("no entry with ID %q", id)
+	}
+
+	return val, nil
+}
+
 type ThreadEntry interface {
-	Tree(int) []string
+	// Tree renders a tread entry of the given level as a list of strings. It places message IDs in the given IDMap.
+	Tree(int, *IDMap) []string
 }
 
 // A thread is a list of child threads or messages
 type Thread []ThreadEntry
 
-func (t Thread) Tree(indent int) []string {
+func (t Thread) Tree(indent int, m *IDMap) []string {
 	var entries []string
 
 	for _, e := range t {
-		entries = append(entries, e.Tree(indent+1)...)
+		entries = append(entries, e.Tree(indent+1, m)...)
 	}
 
 	return entries
@@ -80,7 +111,7 @@ type ThreadMessage struct {
 	Headers      map[string]string
 }
 
-func (t ThreadMessage) Tree(indent int) []string {
+func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
 	subject := t.Headers["Subject"]
 	if len(subject) > _maxSubjectLen {
 		subject = subject[:_maxSubjectLen] + "..."
@@ -88,17 +119,29 @@ func (t ThreadMessage) Tree(indent int) []string {
 
 	is := strings.Repeat(" ", indent)
 
-	res := []string{
-		is + "(F:" + t.Headers["From"] + ") (S:" + subject + ")" + fmt.Sprintf("%v", t.Tags),
-		is + t.ID,
+	id := m.Put(t.ID)
+	log.Println("msg id:", id, t.ID, "indent:", indent)
+
+	mailFrom := t.Headers["From"]
+	fromAddr, err := mail.ParseAddress(mailFrom)
+	if err != nil {
+		log.Printf("can't parse From header %q: %s", mailFrom, err)
+	} else {
+		if fromAddr.Name != "" {
+			mailFrom = fromAddr.Name
+		} else {
+			mailFrom = fromAddr.Address
+		}
 	}
+
+	res := []string{
+		id + "\t" + is + subject + "\t" + "(" + mailFrom + ")\t" + fmt.Sprintf("%v", t.Tags),
+	}
+
+	log.Println("res", res)
 
 	return res
 }
-
-// Message ID: Looks a bit like an email address, with a saner part before the @
-// TODO: Check if this is completely correct
-var _messageIDRegex = regexp.MustCompile(`[a-zA-Z0-9.-]+@[a-zA-Z0-9.-]+\.[a-z]+`)
 
 func displayThread(wg *sync.WaitGroup, threadID string) {
 	defer wg.Done()
@@ -134,8 +177,6 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		return
 	}
 
-	log.Printf("got %d bytes of output: %q", len(output), output)
-
 	var thread Thread
 
 	err = json.Unmarshal(output, &thread)
@@ -146,10 +187,10 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	win.Clear()
 
-	log.Printf("got thread: %#v", thread)
+	idMap := IDMap{Prefix: "msg_"}
 
-	entries := thread.Tree(0)
-	longestcommon.TrimPrefix(entries)
+	entries := thread.Tree(0, &idMap)
+	// longestcommon.TrimPrefix(entries)
 	win.PrintTabbed(strings.Join(entries, "\n"))
 
 	err = win.Ctl("clean")
@@ -186,9 +227,25 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		log.Printf("got 'Look' event: %q", evt.Text)
 
 		// Match message IDs
-		id := bytes.Trim(evt.Text, " \r\t\n")
+		id := string(bytes.Trim(evt.Text, " \r\t\n"))
 
-		if !_messageIDRegex.Match(id) {
+		log.Printf("looking for id %q", id)
+
+		if !strings.HasPrefix(id, idMap.Prefix) {
+			// Doesn't look like a thread ID, send it back to ACME
+			err := win.WriteEvent(evt)
+			if err != nil {
+				log.Printf("can't write event: %s", err)
+				return
+			}
+			continue
+		}
+
+		log.Println("looking up message ID")
+
+		// Get message ID. If we don't have any, push the event back to ACME
+		id, err := idMap.Get(id)
+		if err != nil {
 			// Doesn't look like a thread ID, send it back to ACME
 			err := win.WriteEvent(evt)
 			if err != nil {
