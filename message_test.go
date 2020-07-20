@@ -71,3 +71,18 @@ func TestMessage_Decode2(t *testing.T) {
 	require.IsType(t, MessagePartContentText{}, m.Body[0].Content)
 	assert.Equal(t, "text/plain", m.Body[0].ContentType)
 }
+
+func TestMessage_Decode3(t *testing.T) {
+	body, err := ioutil.ReadFile("test-data/message3.json")
+	require.NoError(t, err)
+
+	var m MessageRoot
+	err = json.Unmarshal(body, &m)
+
+	require.NoError(t, err)
+
+	require.Len(t, m.Body, 1)
+	assert.Equal(t, m.Body[0].ContentType, "multipart/alternative")
+
+	require.IsType(t, MessagePartMultipartAlternative{}, m.Body[0].Content)
+}

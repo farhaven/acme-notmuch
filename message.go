@@ -224,36 +224,14 @@ func (m *MessageRoot) UnmarshalJSON(data []byte) error {
 	// - A few layers of nested JSON arrays
 	// - Somewhere inside, a JSON object
 	// This is likely the result of `notmuch show` expecting to be used to extract complete threads. We're just using it to get single messages though.
-peelOnion:
-	for {
-		// Peel off a layer of the array onion
-		var parts []json.RawMessage
-		err := json.Unmarshal(data, &parts)
-		if err != nil {
-			return err
-		}
-
-		// From all parts, find the first entry that an array and use that for the next layer. If we find an object, we're done.
-		// There's `null`s in there quite a bit, so we skip those by checking for zero length array or object.
-		for _, p := range parts {
-			var array []interface{}
-			err := json.Unmarshal(p, &array)
-			if err == nil && len(array) != 0 {
-				data = p
-				continue peelOnion
-			}
-
-			var obj map[string]interface{}
-			err = json.Unmarshal(p, &obj)
-			if err == nil && len(obj) != 0 {
-				data = p
-				break peelOnion
-			}
-		}
-
-		// Didn't find a suitable array
-		return errors.New("can't find inner layer of the onion!")
+	// There is only ever one JSON object in the data, so we get a bit rough and cut everything but the part between the first `{` and the last `}`.
+	first := bytes.IndexByte(data, '{')
+	last := bytes.LastIndexByte(data, '}')
+	if first == -1 || last == -1 {
+		return errors.New("can't find object borders")
 	}
+
+	data = data[first:last+1]
 
 	// This is a duplicate of the struct layout to prevent recursion into UnmarshalJSON
 	var dup struct {

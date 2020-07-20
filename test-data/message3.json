@@ -1,0 +1,59 @@
+[
+  [
+    [
+      null,
+      [
+        [
+          null,
+          [
+            [
+              null,
+              []
+            ],
+            [
+              {
+                "id": "msg@example.com",
+                "match": true,
+                "excluded": false,
+                "filename": [
+                  "/some/path"
+                ],
+                "timestamp": 1595254577,
+                "date_relative": "Today 16:16",
+                "tags": ["a tag"
+                ],
+                "body": [
+                  {
+                    "id": 1,
+                    "content-type": "multipart/alternative",
+                    "content": [
+                      {
+                        "id": 2,
+                        "content-type": "text/plain",
+                        "content": "A plaintext mail"
+                      },
+                      {
+                        "id": 3,
+                        "content-type": "text/html",
+                        "content": "<html>Stuff</html>"
+                      }
+                    ]
+                  }
+                ],
+                "crypto": {},
+                "headers": {
+                  "Subject": "Foo",
+                  "From": "bla@example.com",
+                  "To": "fnord@example.com",
+                  "Cc": "more@example.com, gna@example.com",
+                  "Date": "Mon, 20 Jul 2020 10:16:17 -0400"
+                }
+              },
+              []
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+]
