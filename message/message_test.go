@@ -1,4 +1,4 @@
-package main
+package message
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ func TestMessage_Decode1(t *testing.T) {
 	body, err := ioutil.ReadFile("test-data/message.json")
 	require.NoError(t, err)
 
-	var m MessageRoot
+	var m Root
 	err = json.Unmarshal(body, &m)
 
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestMessage_Decode2(t *testing.T) {
 	body, err := ioutil.ReadFile("test-data/message2.json")
 	require.NoError(t, err)
 
-	var m MessageRoot
+	var m Root
 	err = json.Unmarshal(body, &m)
 
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestMessage_Decode3(t *testing.T) {
 	body, err := ioutil.ReadFile("test-data/message3.json")
 	require.NoError(t, err)
 
-	var m MessageRoot
+	var m Root
 	err = json.Unmarshal(body, &m)
 
 	require.NoError(t, err)
