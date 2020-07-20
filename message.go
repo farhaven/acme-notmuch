@@ -28,8 +28,13 @@ func (m MessagePartContentText) Render() string {
 type MessagePartContentMultipartMixed []MessagePart
 
 func (m MessagePartContentMultipartMixed) Render() string {
-	panic("not yet!")
-	return ""
+	var ret []string
+
+	for _, part := range m {
+		ret = append(ret, part.Render(), "")
+	}
+
+	return strings.Join(ret, "\n")
 }
 
 type MessagePartRFC822 struct {
@@ -38,30 +43,62 @@ type MessagePartRFC822 struct {
 }
 
 func (m MessagePartRFC822) Render() string {
-	panic("not yet!")
+	var ret []string
 
-	return ""
+	log.Println("TODO: Better rendering of headers")
+	log.Println("TODO: Print separator???")
+
+	for k, v := range m.Headers{
+		ret = append(ret, k + ":\t" + v)
+	}
+
+	ret = append(ret, "")
+
+	for _, part := range m.Body {
+		ret = append(ret, part.Render())
+	}
+
+	return strings.Join(ret, "\n")
 }
 
 type MessagePartMultipleRFC822 []MessagePartRFC822
 
 func (m MessagePartMultipleRFC822) Render() string {
-	panic("not yet!")
+	var ret []string
 
-	return ""
+	for _, part := range m {
+		ret = append(ret, part.Render(), "")
+	}
+
+	return strings.Join(ret, "\n")
 }
 
 type MessagePartMultipartAlternative []MessagePart
 func (m MessagePartMultipartAlternative) Render() string {
-	panic("not yet")
+	log.Println("TODO: Smarter detection of which part to render")
 
-	return ""
+	textIdx := 0
+
+	for idx, part := range m {
+		if part.ContentType == "text/plain" {
+			textIdx = idx
+			break
+		}
+	}
+
+	return m[textIdx].Render()
 }
 
 type MessagePart struct {
 	ID          int
 	ContentType string `json:"content-type"`
 	Content     MessagePartContent
+}
+
+func (m MessagePart) Render() string {
+	log.Println("TODO: Render content type")
+
+	return m.Content.Render()
 }
 
 func (m *MessagePart) UnmarshalJSON(data []byte) error {
@@ -142,10 +179,11 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 }
 
 type MessageRoot struct {
+	MessagePartRFC822
+
 	ID     string
 	Crypto map[string]interface{} // TODO
 	Tags   []string
-	MessagePartRFC822
 }
 
 func (m *MessageRoot) UnmarshalJSON(data []byte) error {
@@ -186,9 +224,20 @@ func (m *MessageRoot) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (m MessageRoot) GetContent() string {
-	panic("not yet!")
-	return ""
+func (m MessageRoot) Render() string {
+	ret := []string{
+		"Tags:\t" + strings.Join(m.Tags, ", "),
+		"",
+		// TODO: Crypto
+	}
+
+	log.Println("TODO: Better printing of tag: Join headers before printing")
+
+	for _, part := range m.Body {
+		ret = append(ret, part.Render())
+	}
+
+	return strings.Join(ret, "\n")
 }
 
 func writeMessageBody(win *acme.Win, messageID string) error {
@@ -202,16 +251,16 @@ func writeMessageBody(win *acme.Win, messageID string) error {
 		return errors.Wrap(err, "loading message payload")
 	}
 
-	log.Printf("got raw payload: %s", output)
-
 	var msg MessageRoot
 	err = json.Unmarshal(output, &msg)
 	if err != nil {
 		return errors.Wrap(err, "decoding payload")
 	}
 
-	// TODO: Render message body
-	panic("not yet!")
+	err = win.Fprintf("body", "%s", msg.Render())
+	if err != nil {
+		return errors.Wrap(err, "writing body")
+	}
 
 	return nil
 }
