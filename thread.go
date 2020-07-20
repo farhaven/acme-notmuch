@@ -76,6 +76,9 @@ func (t *Thread) UnmarshalJSON(data []byte) error {
 	)
 
 	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return err
+	}
 
 	for _, rawEntry := range raw {
 		// Decode the raw message either as a ThreadMessage or as a whole thread
