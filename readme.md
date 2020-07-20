@@ -20,3 +20,8 @@ The following things _do_ work:
 * Running queries and showing the results
 * Showing messages, including rough HTML -> Text conversion for messages with MIME content type "text/html"
 * Jumping to the next unread message in the thread of the currently open message
+
+## Requirements
+* Acme
+* Mail stored in a Notmuch database
+* The `notmuch` command somewhere in your path
