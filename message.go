@@ -106,16 +106,16 @@ type MessagePartMultipartAlternative []MessagePart
 func (m MessagePartMultipartAlternative) Render() string {
 	log.Println("TODO: Smarter detection of which part to render")
 
-	textIdx := 0
+	showIdx := 0
 
 	for idx, part := range m {
-		if part.ContentType == "text/plain" {
-			textIdx = idx
+		if part.ContentType == "text/html" {
+			showIdx = idx
 			break
 		}
 	}
 
-	return m[textIdx].Render()
+	return m[showIdx].Render()
 }
 
 type MessagePart struct {

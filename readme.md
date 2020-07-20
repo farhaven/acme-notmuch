@@ -9,6 +9,11 @@ There are a few things missing that are required to make this useful:
 	* [ ] Reply to some mail
 	* [ ] Write an initial mail
 * [ ] Listing and saving attachments
+* [ ] Spam handling with bogofilter
+	* [ ] Mark messages as Ham/Spam
+* [ ] Switch between `text/plain` or `text/html` view for `multipart/alternative` messages
+	* Currently, if a `text/html` part exists, it is rendered as text and shown.
+	* If there is none, whatever the first part is will be shown
 
 The following things _do_ work:
 
