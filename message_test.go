@@ -29,7 +29,7 @@ func TestMessage_Decode(t *testing.T) {
 	assert.Equal(t, mp0[1].ContentType, "message/rfc822")
 	assert.Equal(t, mp0[2].ContentType, "message/rfc822")
 
-	require.IsType(t, MessagePartContentText(""), mp0[0].Content)
+	require.IsType(t, MessagePartContentText{}, mp0[0].Content)
 	require.IsType(t, MessagePartMultipleRFC822{}, mp0[1].Content)
 	require.IsType(t, MessagePartMultipleRFC822{}, mp0[2].Content)
 
@@ -44,10 +44,10 @@ func TestMessage_Decode(t *testing.T) {
 	mp0100 := mp010.Body[0].Content.(MessagePartMultipartAlternative)
 	require.Len(t, mp0100, 2)
 
-	require.IsType(t, MessagePartContentText(""), mp0100[0].Content)
+	require.IsType(t, MessagePartContentText{}, mp0100[0].Content)
 	assert.Equal(t, "text/plain", mp0100[0].ContentType)
 
-	require.IsType(t, MessagePartContentText(""), mp0100[1].Content)
+	require.IsType(t, MessagePartContentText{}, mp0100[1].Content)
 	assert.Equal(t, "text/html", mp0100[1].ContentType)
 
 	require.Len(t, mp02, 1)

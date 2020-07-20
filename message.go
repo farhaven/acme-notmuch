@@ -13,16 +13,44 @@ import (
 
 	"9fans.net/go/acme"
 	"github.com/pkg/errors"
+	"github.com/jaytaylor/html2text"
 )
 
 type MessagePartContent interface {
 	Render() string
 }
 
-type MessagePartContentText string
+type MessagePartContentText struct {
+	Text      string
+	StripHTML bool
+}
+
+func (m *MessagePartContentText) UnmarshalJSON(data []byte) error {
+	var s string
+
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+
+	m.Text = s
+	m.StripHTML = false
+
+	return nil
+}
 
 func (m MessagePartContentText) Render() string {
-	return string(m)
+	if m.StripHTML {
+		txt, err := html2text.FromString(m.Text, html2text.Options{PrettyTables: true})
+		if err != nil {
+			log.Printf("can't strip HTML tags: %s", err)
+			return m.Text
+		}
+
+		return txt
+	}
+
+	return m.Text
 }
 
 type MessagePartContentMultipartMixed []MessagePart
@@ -48,8 +76,8 @@ func (m MessagePartRFC822) Render() string {
 	log.Println("TODO: Better rendering of headers")
 	log.Println("TODO: Print separator???")
 
-	for k, v := range m.Headers{
-		ret = append(ret, k + ":\t" + v)
+	for k, v := range m.Headers {
+		ret = append(ret, k+":\t"+v)
 	}
 
 	ret = append(ret, "")
@@ -74,6 +102,7 @@ func (m MessagePartMultipleRFC822) Render() string {
 }
 
 type MessagePartMultipartAlternative []MessagePart
+
 func (m MessagePartMultipartAlternative) Render() string {
 	log.Println("TODO: Smarter detection of which part to render")
 
@@ -131,7 +160,7 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 
 	if partial.ContentType == "text/plain" || partial.ContentType == "text/html" {
 		if len(partial.Content) == 0 {
-			m.Content = MessagePartContentText("")
+			m.Content = MessagePartContentText{}
 			return nil
 		}
 
@@ -140,6 +169,10 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 		err := json.Unmarshal(partial.Content, &content)
 		if err != nil {
 			return errors.Wrapf(err, "parsing %s", partial.ContentType)
+		}
+
+		if partial.ContentType == "text/html" {
+			content.StripHTML = true
 		}
 
 		m.Content = content
@@ -244,7 +277,7 @@ func writeMessageBody(win *acme.Win, messageID string) error {
 	// TODO: Decode PGP
 	// TODO: Handle HTML mail
 
-	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "id:"+messageID)
+	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
