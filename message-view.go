@@ -17,31 +17,6 @@ import (
 	"github.com/farhaven/acme-notmuch/message"
 )
 
-func writeMessageBody(win *acme.Win, messageID string) error {
-	// TODO: Decode PGP
-	// TODO: Handle HTML mail
-
-	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return errors.Wrap(err, "loading message payload")
-	}
-
-	var msg message.Root
-	err = json.Unmarshal(output, &msg)
-	if err != nil {
-		return errors.Wrap(err, "decoding payload")
-	}
-
-	err = win.Fprintf("body", "%s", msg.Render())
-	if err != nil {
-		return errors.Wrap(err, "writing body")
-	}
-
-	return nil
-}
-
 // nextUnread returns the message ID of the next unread message in the same thread as id
 func nextUnread(wg *sync.WaitGroup, id string) error {
 	// Get thread ID of the given message
@@ -120,8 +95,8 @@ func nextUnread(wg *sync.WaitGroup, id string) error {
 	return nil
 }
 
-func getAllHeaders(messageID string) (mail.Header, error) {
-	cmd := exec.Command("notmuch", "show", "--format=raw", "id:"+messageID)
+func getAllHeaders(root message.Root) (mail.Header, error) {
+	cmd := exec.Command("notmuch", "show", "--format=raw", "id:"+root.ID)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -133,11 +108,14 @@ func getAllHeaders(messageID string) (mail.Header, error) {
 		return nil, err
 	}
 
+	// Add tags as a pseudo-header
+	msg.Header["Tags"] = []string{strings.Join(root.Tags, ", ")}
+
 	return msg.Header, nil
 }
 
-func writeMessageHeaders(win *acme.Win, messageID string) error {
-	allHeaders, err := getAllHeaders(messageID)
+func writeMessageHeaders(win *acme.Win, msg message.Root) error {
+	allHeaders, err := getAllHeaders(msg)
 	if err != nil {
 		return errors.Wrap(err, "getting headers")
 	}
@@ -172,7 +150,7 @@ func writeMessageHeaders(win *acme.Win, messageID string) error {
 		headers = append(headers, strings.Title(hdr)+":\t"+strings.Join(vals, ", "))
 	}
 
-	moreHeaders := []string{"reply-to", "list-id", "x-bogosity", "content-type", "subject"}
+	moreHeaders := []string{"reply-to", "list-id", "x-bogosity", "content-type", "subject", "tags"}
 	for _, hdr := range moreHeaders {
 		val := allHeaders.Get(hdr)
 
@@ -203,16 +181,10 @@ func writeMessageHeaders(win *acme.Win, messageID string) error {
 
 func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
-	// - MIME multipart
-	// - Handle HTML mail
 	// - "Attachments" command
 	//   - opens a new window with the attachments (MIME parts) listed, allows saving them somewhere
 	//   - Decode base64
-	// - Only show interesting headers by default
-	//   - To, From, Date, Cc, Bcc, Reply-To
-	//   - Also show tags
-	//   - Add "Headers" command to show full list of headers
-	// - "Next unread" command for next unread message in thread
+	// - Add "Headers" command to show full list of headers
 	// - Remove "unread" tag from messages
 
 	defer wg.Done()
@@ -238,13 +210,29 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	win.Clear()
 
-	err = writeMessageHeaders(win, messageID)
+	// TODO: Decode PGP
+	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("can't load message payload: %s", err)
+		return
+	}
+
+	var msg message.Root
+	err = json.Unmarshal(output, &msg)
+	if err != nil {
+		log.Printf("can't decode message: %s", err)
+		return
+	}
+
+	err = writeMessageHeaders(win, msg)
 	if err != nil {
 		log.Printf("can't write headers for %q: %s", messageID, err)
 		return
 	}
 
-	err = writeMessageBody(win, messageID)
+	err = win.Fprintf("body", "\n%s", msg.Render())
 	if err != nil {
 		log.Printf("can't write message body: %s", err)
 		return

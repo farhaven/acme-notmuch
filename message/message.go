@@ -252,13 +252,7 @@ func (m *Root) UnmarshalJSON(data []byte) error {
 }
 
 func (m Root) Render() string {
-	ret := []string{
-		"Tags:\t" + strings.Join(m.Tags, ", "),
-		"",
-		// TODO: Crypto
-	}
-
-	log.Println("TODO: Better printing of tag: Join headers before printing")
+	var ret []string
 
 	for _, part := range m.Body {
 		ret = append(ret, part.Render())
