@@ -1,0 +1,98 @@
+[
+  [
+    [
+      {
+        "id": "4711@example.com",
+        "match": true,
+        "excluded": false,
+        "filename": [
+          "/some/file/path"
+        ],
+        "timestamp": 1595246244,
+        "date_relative": "Today 13:57",
+        "tags": [
+          "a",
+          "few",
+          "tags"
+        ],
+        "body": [
+          {
+            "id": 1,
+            "content-type": "multipart/mixed",
+            "content": [
+              {
+                "id": 2,
+                "content-type": "text/plain",
+                "content": "A plaintext message"
+              },
+              {
+                "id": 3,
+                "content-type": "message/rfc822",
+                "content": [
+                  {
+                    "headers": {
+                      "Subject": "Some subject",
+                      "From": "Test <test@example.com>",
+                      "To": "undisclosed-recipients: ;",
+                      "Reply-To": "test@example.com",
+                      "Date": "Mon, 20 Jul 2020 13:57:17 +0200"
+                    },
+                    "body": [
+                      {
+                        "id": 4,
+                        "content-type": "multipart/alternative",
+                        "content": [
+                          {
+                            "id": 5,
+                            "content-type": "text/plain",
+                            "content": "Another plaintext message"
+                          },
+                          {
+                            "id": 6,
+                            "content-type": "text/html",
+                            "content-charset": "UTF-8",
+                            "content-transfer-encoding": "quoted-printable",
+                            "content-length": 1958,
+                            "content": "An HTML message"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": 7,
+                "content-type": "message/rfc822",
+                "content": [
+                  {
+                    "headers": {
+                      "Subject": "Some other subject",
+                      "From": "test2@example.com",
+                      "Date": "Mon, 20 Jul 2020 13:57:24 +0200"
+                    },
+                    "body": [
+                      {
+                        "id": 8,
+                        "content-type": "text/plain",
+                        "content": "Yet another plain text message"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "crypto": {},
+        "headers": {
+          "Subject": "A nested message",
+          "From": "foo@example.com",
+          "To": "bar@example.com",
+          "Date": "Mon, 20 Jul 2020 13:57:24 +0200"
+        }
+      },
+      []
+    ]
+  ]
+]

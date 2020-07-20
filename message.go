@@ -3,13 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
-	"mime"
-	"mime/multipart"
 	"net/mail"
 	"os/exec"
 	"strings"
@@ -17,55 +12,207 @@ import (
 	"time"
 
 	"9fans.net/go/acme"
+	"github.com/pkg/errors"
 )
 
-func writeMessageBody(win *acme.Win, msg *mail.Message) error {
-	mediaType, mediaParams, err := mime.ParseMediaType(msg.Header.Get("content-type"))
-	if err != nil {
-		log.Printf("can't determine media type. using text/plain: %s", err)
-		mediaType = "text/plain"
+type MessagePartContent interface {
+	Render() string
+}
+
+type MessagePartContentText string
+
+func (m MessagePartContentText) Render() string {
+	return string(m)
+}
+
+type MessagePartContentMultipartMixed []MessagePart
+
+func (m MessagePartContentMultipartMixed) Render() string {
+	panic("not yet!")
+	return ""
+}
+
+type MessagePartRFC822 struct {
+	Headers map[string]string
+	Body    []MessagePart
+}
+
+func (m MessagePartRFC822) Render() string {
+	panic("not yet!")
+
+	return ""
+}
+
+type MessagePartMultipleRFC822 []MessagePartRFC822
+
+func (m MessagePartMultipleRFC822) Render() string {
+	panic("not yet!")
+
+	return ""
+}
+
+type MessagePartMultipartAlternative []MessagePart
+func (m MessagePartMultipartAlternative) Render() string {
+	panic("not yet")
+
+	return ""
+}
+
+type MessagePart struct {
+	ID          int
+	ContentType string `json:"content-type"`
+	Content     MessagePartContent
+}
+
+func (m *MessagePart) UnmarshalJSON(data []byte) error {
+	var partial struct {
+		ID          int
+		ContentType string `json:"content-type"`
+		Content     json.RawMessage
 	}
 
-	log.Println("mediatype", mediaType)
-	log.Println("params", mediaParams)
+	err := json.Unmarshal(data, &partial)
+	if err != nil {
+		return errors.Wrap(err, "first stage unwrap")
+	}
 
-	if strings.HasPrefix(mediaType, "multipart/") {
-		reader := multipart.NewReader(msg.Body, mediaParams["boundary"])
+	m.ID = partial.ID
+	m.ContentType = partial.ContentType
 
-		for {
-			p, err := reader.NextPart()
+	if partial.ContentType == "multipart/mixed" {
+		var content MessagePartContentMultipartMixed
 
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			body, err := ioutil.ReadAll(p)
-			if err != nil {
-				return err
-			}
-
-			err = win.Fprintf("body", "\nPart headers: %v\n\n%s", p.Header, body)
-			if err != nil {
-				return err
-			}
+		err := json.Unmarshal(partial.Content, &content)
+		if err != nil {
+			return errors.Wrapf(err, "parsing %s", partial.ContentType)
 		}
+
+		m.Content = content
 
 		return nil
 	}
 
-	body, err := ioutil.ReadAll(msg.Body)
+	if partial.ContentType == "text/plain" || partial.ContentType == "text/html" {
+		if len(partial.Content) == 0 {
+			m.Content = MessagePartContentText("")
+			return nil
+		}
+
+		var content MessagePartContentText
+
+		err := json.Unmarshal(partial.Content, &content)
+		if err != nil {
+			return errors.Wrapf(err, "parsing %s", partial.ContentType)
+		}
+
+		m.Content = content
+
+		return nil
+	}
+
+	if partial.ContentType == "message/rfc822" {
+		var content MessagePartMultipleRFC822
+
+		err := json.Unmarshal(partial.Content, &content)
+		if err != nil {
+			return errors.Wrapf(err, "parsing %s", partial.ContentType)
+		}
+
+		m.Content = content
+
+		return nil
+	}
+
+	if partial.ContentType == "multipart/alternative" {
+		var content MessagePartMultipartAlternative
+
+		err := json.Unmarshal(partial.Content, &content)
+		if err != nil {
+			return errors.Wrapf(err, "parsing %s", partial.ContentType)
+		}
+
+		m.Content = content
+
+		return nil
+	}
+
+	log.Printf("decoding: %q", partial.Content)
+
+	return fmt.Errorf("not yet: %s", partial.ContentType)
+}
+
+type MessageRoot struct {
+	ID     string
+	Crypto map[string]interface{} // TODO
+	Tags   []string
+	MessagePartRFC822
+}
+
+func (m *MessageRoot) UnmarshalJSON(data []byte) error {
+	// The JSON has a weird layout:
+	// - Two layers of nesting
+	// - Inside that, an array with an object and an empty array
+	var parts [][][]json.RawMessage
+
+	err := json.Unmarshal(data, &parts)
+	if err != nil {
+		return errors.Wrap(err, "first stage unwrap")
+	}
+
+	if len(parts) != 1 || len(parts[0]) != 1 || len(parts[0][0]) != 2 {
+		return errors.New("unexpected part size")
+	}
+
+	// This is a duplicate of the struct layout to prevent recursion into UnmarshalJSON
+	var dup struct {
+		ID      string
+		Crypto  map[string]interface{} // TODO
+		Tags    []string
+		Headers map[string]string
+		Body    []MessagePart
+	}
+
+	err = json.Unmarshal(parts[0][0][0], &dup)
 	if err != nil {
 		return err
 	}
 
-	err = win.Fprintf("body", "\n%s", body)
+	m.ID = dup.ID
+	m.Crypto = dup.Crypto
+	m.Tags = dup.Tags
+	m.Headers = dup.Headers
+	m.Body = dup.Body
+
+	return nil
+}
+
+func (m MessageRoot) GetContent() string {
+	panic("not yet!")
+	return ""
+}
+
+func writeMessageBody(win *acme.Win, messageID string) error {
+	// TODO: Decode PGP
+	// TODO: Handle HTML mail
+
+	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "id:"+messageID)
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "loading message payload")
 	}
+
+	log.Printf("got raw payload: %s", output)
+
+	var msg MessageRoot
+	err = json.Unmarshal(output, &msg)
+	if err != nil {
+		return errors.Wrap(err, "decoding payload")
+	}
+
+	// TODO: Render message body
+	panic("not yet!")
+
 	return nil
 }
 
@@ -147,6 +294,87 @@ func nextUnread(wg *sync.WaitGroup, id string) error {
 	return nil
 }
 
+func getAllHeaders(messageID string) (mail.Header, error) {
+	cmd := exec.Command("notmuch", "show", "--format=raw", "id:"+messageID)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := mail.ReadMessage(bytes.NewBuffer(output))
+	if err != nil {
+		return nil, err
+	}
+
+	return msg.Header, nil
+}
+
+func writeMessageHeaders(win *acme.Win, messageID string) error {
+	allHeaders, err := getAllHeaders(messageID)
+	if err != nil {
+		return errors.Wrap(err, "getting headers")
+	}
+
+	var errs []error
+
+	date, err := allHeaders.Date()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("can't read date: %w", err))
+		date = time.Unix(0, 0)
+	}
+
+	headers := []string{"Date:\t" + date.Format(time.RFC3339)}
+
+	addrHeaders := []string{"from", "to", "cc", "bcc"}
+	for _, hdr := range addrHeaders {
+		addrs, err := allHeaders.AddressList(hdr)
+		if err != nil {
+			if err == mail.ErrHeaderNotPresent {
+				continue
+			}
+
+			return errors.Wrap(err, "reading address header")
+		}
+
+		var vals []string
+
+		for _, addr := range addrs {
+			vals = append(vals, addr.String())
+		}
+
+		headers = append(headers, strings.Title(hdr)+":\t"+strings.Join(vals, ", "))
+	}
+
+	moreHeaders := []string{"reply-to", "list-id", "x-bogosity", "content-type", "subject"}
+	for _, hdr := range moreHeaders {
+		val := allHeaders.Get(hdr)
+
+		if val == "" {
+			continue
+		}
+
+		headers = append(headers, strings.Title(hdr)+":\t"+val)
+	}
+
+	if len(errs) != 0 {
+		err = win.Fprintf("body", "Errors during processing:\n")
+		if err != nil {
+			return errors.Wrap(err, "writing to window")
+		}
+		for _, err := range errs {
+			err = win.Fprintf("body", "%s\n", err.Error())
+			if err != nil {
+				return errors.Wrap(err, "writing to window")
+			}
+		}
+	}
+
+	win.PrintTabbed(strings.Join(headers, "\n"))
+
+	return nil
+}
+
 func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
 	// - MIME multipart
@@ -182,92 +410,18 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		return
 	}
 
-	cmd := exec.Command("notmuch", "show", "--format=raw", "id:"+messageID)
+	win.Clear()
 
-	output, err := cmd.CombinedOutput()
+	err = writeMessageHeaders(win, messageID)
 	if err != nil {
-		log.Printf("can't get message %s: %s", messageID, err)
+		log.Printf("can't write headers for %q: %s", messageID, err)
 		return
 	}
 
-	win.Clear()
-
-	msg, err := mail.ReadMessage(bytes.NewBuffer(output))
+	err = writeMessageBody(win, messageID)
 	if err != nil {
-		// Parsing failed, just dump the content out as is
-		prefix := "Can't parse message:"
-		err = win.Fprintf("data", "%s: %s\n\n%s", prefix, err, output)
-		if err != nil {
-			log.Printf("can't write data to window: %s", err)
-			return
-		}
-	} else {
-		log.Println("Headers:", msg.Header)
-
-		var errs []error
-
-		date, err := msg.Header.Date()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("can't read date: %w", err))
-			date = time.Unix(0, 0)
-		}
-
-		headers := []string{"Date:\t" + date.Format(time.RFC3339)}
-
-		addrHeaders := []string{"from", "to", "cc", "bcc"}
-		for _, hdr := range addrHeaders {
-			addrs, err := msg.Header.AddressList(hdr)
-			if err != nil {
-				if err == mail.ErrHeaderNotPresent {
-					continue
-				}
-
-				log.Printf("can't read address header %q: %s", hdr, err)
-				return
-			}
-
-			var vals []string
-
-			for _, addr := range addrs {
-				vals = append(vals, addr.String())
-			}
-
-			headers = append(headers, strings.Title(hdr)+":\t"+strings.Join(vals, ", "))
-		}
-
-		moreHeaders := []string{"reply-to", "list-id", "x-bogosity", "content-type", "subject"}
-		for _, hdr := range moreHeaders {
-			val := msg.Header.Get(hdr)
-
-			if val == "" {
-				continue
-			}
-
-			headers = append(headers, strings.Title(hdr)+":\t"+val)
-		}
-
-		if len(errs) != 0 {
-			err = win.Fprintf("body", "Errors during processing:\n")
-			if err != nil {
-				log.Printf("can't write data to window: %s", err)
-				return
-			}
-			for _, err := range errs {
-				err = win.Fprintf("body", "%s\n", err.Error())
-				if err != nil {
-					log.Printf("can't write data to window: %s", err)
-					return
-				}
-			}
-		}
-
-		win.PrintTabbed(strings.Join(headers, "\n"))
-
-		err = writeMessageBody(win, msg)
-		if err != nil {
-			log.Printf("can't write message body: %s", err)
-			return
-		}
+		log.Printf("can't write message body: %s", err)
+		return
 	}
 
 	err = winClean(win)
