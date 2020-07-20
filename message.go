@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"9fans.net/go/acme"
-	"github.com/pkg/errors"
 	"github.com/jaytaylor/html2text"
+	"github.com/pkg/errors"
 )
 
 type MessagePartContent interface {
@@ -221,17 +221,38 @@ type MessageRoot struct {
 
 func (m *MessageRoot) UnmarshalJSON(data []byte) error {
 	// The JSON has a weird layout:
-	// - Two layers of nesting
-	// - Inside that, an array with an object and an empty array
-	var parts [][][]json.RawMessage
+	// - A few layers of nested JSON arrays
+	// - Somewhere inside, a JSON object
+	// This is likely the result of `notmuch show` expecting to be used to extract complete threads. We're just using it to get single messages though.
+peelOnion:
+	for {
+		// Peel off a layer of the array onion
+		var parts []json.RawMessage
+		err := json.Unmarshal(data, &parts)
+		if err != nil {
+			return err
+		}
 
-	err := json.Unmarshal(data, &parts)
-	if err != nil {
-		return errors.Wrap(err, "first stage unwrap")
-	}
+		// From all parts, find the first entry that an array and use that for the next layer. If we find an object, we're done.
+		// There's `null`s in there quite a bit, so we skip those by checking for zero length array or object.
+		for _, p := range parts {
+			var array []interface{}
+			err := json.Unmarshal(p, &array)
+			if err == nil && len(array) != 0 {
+				data = p
+				continue peelOnion
+			}
 
-	if len(parts) != 1 || len(parts[0]) != 1 || len(parts[0][0]) != 2 {
-		return errors.New("unexpected part size")
+			var obj map[string]interface{}
+			err = json.Unmarshal(p, &obj)
+			if err == nil && len(obj) != 0 {
+				data = p
+				break peelOnion
+			}
+		}
+
+		// Didn't find a suitable array
+		return errors.New("can't find inner layer of the onion!")
 	}
 
 	// This is a duplicate of the struct layout to prevent recursion into UnmarshalJSON
@@ -243,7 +264,7 @@ func (m *MessageRoot) UnmarshalJSON(data []byte) error {
 		Body    []MessagePart
 	}
 
-	err = json.Unmarshal(parts[0][0][0], &dup)
+	err := json.Unmarshal(data, &dup)
 	if err != nil {
 		return err
 	}

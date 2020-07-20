@@ -1,0 +1,50 @@
+[
+  [
+    [
+      null,
+      [
+        [
+          {
+            "id": "msg-id@example.com",
+            "match": true,
+            "excluded": false,
+            "filename": [
+              "/some/file/path"
+            ],
+            "timestamp": 1595252941,
+            "date_relative": "Today 15:49",
+            "tags": [
+              "a",
+              "few",
+              "tags"
+            ],
+            "body": [
+              {
+                "id": 1,
+                "content-type": "text/plain",
+                "content": "A plain text message"
+              }
+            ],
+            "crypto": {},
+            "headers": {
+              "Subject": "Some subject",
+              "From": "test@example.com",
+              "To": "foo@exampe.com, bar@example.com",
+              "Date": "Mon, 20 Jul 2020 07:49:01 -0600"
+            }
+          },
+          [
+            [
+              null,
+              []
+            ],
+            [
+              null,
+              []
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+]

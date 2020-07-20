@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMessage_Decode(t *testing.T) {
+func TestMessage_Decode1(t *testing.T) {
 	body, err := ioutil.ReadFile("test-data/message.json")
 	require.NoError(t, err)
 
@@ -50,7 +50,24 @@ func TestMessage_Decode(t *testing.T) {
 	require.IsType(t, MessagePartContentText{}, mp0100[1].Content)
 	assert.Equal(t, "text/html", mp0100[1].ContentType)
 
+	mp01001 := mp0100[1].Content.(MessagePartContentText)
+	assert.True(t, mp01001.StripHTML)
+
 	require.Len(t, mp02, 1)
 	// ... this could go on testing properties of mp02, but those are already covered by the first embedded
 	// RFC822 message
+}
+
+func TestMessage_Decode2(t *testing.T) {
+	body, err := ioutil.ReadFile("test-data/message2.json")
+	require.NoError(t, err)
+
+	var m MessageRoot
+	err = json.Unmarshal(body, &m)
+
+	require.NoError(t, err)
+
+	require.Len(t, m.Body, 1)
+	require.IsType(t, MessagePartContentText{}, m.Body[0].Content)
+	assert.Equal(t, "text/plain", m.Body[0].ContentType)
 }
