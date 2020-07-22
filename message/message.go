@@ -114,13 +114,21 @@ func (m MessagePartMultipartAlternative) Render() string {
 }
 
 type MessagePart struct {
-	ID          int
-	ContentType string `json:"content-type"`
-	Content     MessagePartContent
+	ID                      int
+	ContentType             string `json:"content-type"`
+	Content                 MessagePartContent
+	ContentDisposition      string `json:"content-disposition"`
+	Filename                string
+	ContentLength           int    `json:"content-length"`
+	ContentTransferEncoding string `json:"content-transfer-encoding"`
 }
 
 func (m MessagePart) Render() string {
 	log.Println("TODO: Render content type")
+
+	if m.ContentDisposition == "attachment" {
+		return "Attachment: " + m.Filename
+	}
 
 	return m.Content.Render()
 }
