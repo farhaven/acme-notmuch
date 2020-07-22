@@ -140,7 +140,8 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 	m.ID = partial.ID
 	m.ContentType = partial.ContentType
 
-	if partial.ContentType == "multipart/mixed" {
+	switch partial.ContentType {
+	case "multipart/mixed", "multipart/signed", "multipart/encrypted":
 		var content MessagePartContentMultipartMixed
 
 		err := json.Unmarshal(partial.Content, &content)
@@ -151,9 +152,7 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 		m.Content = content
 
 		return nil
-	}
-
-	if partial.ContentType == "text/plain" || partial.ContentType == "text/html" {
+	case "text/plain", "text/html", "application/pkcs7-signature", "application/pgp-signature", "application/pgp-encrypted", "text/rfc822-headers":
 		if len(partial.Content) == 0 {
 			m.Content = MessagePartContentText{}
 			return nil
@@ -206,11 +205,64 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("not yet: %s", partial.ContentType)
 }
 
+type CryptoState struct {
+	Signed struct {
+		Encrypted bool
+		Headers   []string
+		Status    []struct {
+			Errors map[string]bool
+			KeyID  string
+			Status string
+		}
+	}
+	Decrypted struct {
+		HeaderMask map[string]string `json:"header-mask"`
+		Status     string
+	}
+}
+
+func (c CryptoState) Render(prefix string) string {
+	var res []string
+
+	if c.Signed.Encrypted {
+		if len(c.Signed.Headers) > 0 {
+			res = append(res, "Signed Headers: "+strings.Join(c.Signed.Headers, ", "))
+		}
+
+		for i, s := range c.Signed.Status {
+			res = append(res, fmt.Sprintf("Signature Status %d: %v", i, s))
+		}
+	}
+
+	if c.Decrypted.Status != "" {
+		res = append(res, "Decryption Status: "+c.Decrypted.Status)
+
+		if len(c.Decrypted.HeaderMask) > 0 {
+			txt := "Decrypted Headers: "
+
+			var hdrs []string
+			for h, v := range c.Decrypted.HeaderMask {
+				hdrs = append(hdrs, strings.Repeat(" ", len(txt)+1)+h+": "+v)
+			}
+
+			if len(hdrs) > 0 {
+				res = append(res, txt+strings.TrimSpace(strings.Join(hdrs, "\n\t")))
+			}
+		}
+	}
+
+	if len(res) == 0 {
+		return ""
+	}
+
+	return "\t" + strings.Join(res, "\n\t")
+}
+
 type Root struct {
 	MessagePartRFC822
 
 	ID     string
-	Crypto map[string]interface{} // TODO
+	Crypto CryptoState
 	Tags   []string
 }
 
@@ -231,7 +283,7 @@ func (m *Root) UnmarshalJSON(data []byte) error {
 	// This is a duplicate of the struct layout to prevent recursion into UnmarshalJSON
 	var dup struct {
 		ID      string
-		Crypto  map[string]interface{} // TODO
+		Crypto  CryptoState
 		Tags    []string
 		Headers map[string]string
 		Body    []MessagePart

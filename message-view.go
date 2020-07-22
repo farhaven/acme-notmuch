@@ -110,6 +110,7 @@ func getAllHeaders(root message.Root) (mail.Header, error) {
 
 	// Add tags as a pseudo-header
 	msg.Header["Tags"] = []string{strings.Join(root.Tags, ", ")}
+	msg.Header["Crypto"] = []string{fmt.Sprintf("%v", root.Crypto)}
 
 	return msg.Header, nil
 }
@@ -159,6 +160,11 @@ func writeMessageHeaders(win *acme.Win, msg message.Root) error {
 		}
 
 		headers = append(headers, strings.Title(hdr)+":\t"+val)
+	}
+
+	crypto := msg.Crypto.Render("\t")
+	if crypto != "" {
+		headers = append(headers, "Crypto:"+crypto)
 	}
 
 	if len(errs) != 0 {
@@ -211,9 +217,9 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 	win.Clear()
 
 	// TODO: Decode PGP
-	cmd := exec.Command("notmuch", "show", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
+	cmd := exec.Command("notmuch", "show", "--decrypt=true", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		log.Printf("can't load message payload: %s", err)
 		return
@@ -222,7 +228,7 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 	var msg message.Root
 	err = json.Unmarshal(output, &msg)
 	if err != nil {
-		log.Printf("can't decode message: %s", err)
+		log.Printf("can't decode message: raw=%s %s", output, err)
 		return
 	}
 
