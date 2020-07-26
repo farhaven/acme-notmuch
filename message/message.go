@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/jaytaylor/html2text"
+	"github.com/mattermost/html2text"
 	"github.com/pkg/errors"
 )
 
@@ -36,7 +36,7 @@ func (m *MessagePartContentText) UnmarshalJSON(data []byte) error {
 
 func (m MessagePartContentText) Render() string {
 	if m.StripHTML {
-		txt, err := html2text.FromString(m.Text, html2text.Options{PrettyTables: true})
+		txt, err := html2text.FromString(m.Text)
 		if err != nil {
 			log.Printf("can't strip HTML tags: %s", err)
 			return m.Text
