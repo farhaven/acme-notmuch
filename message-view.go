@@ -55,13 +55,6 @@ func nextUnread(wg *sync.WaitGroup, id string) error {
 
 	l := thread.PreOrder()
 
-	buf, err := json.MarshalIndent(&l, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	log.Println("pre-order traversal of thread:", string(buf))
-
 	foundThisMsg := false
 	foundNextMsg := false
 	for idx, entry := range l {
