@@ -153,7 +153,7 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 	m.ContentType = partial.ContentType
 
 	switch partial.ContentType {
-	case "multipart/mixed", "multipart/signed", "multipart/encrypted":
+	case "multipart/mixed", "multipart/signed", "multipart/encrypted", "multipart/related":
 		var content MessagePartContentMultipartMixed
 
 		err := json.Unmarshal(partial.Content, &content)
@@ -184,9 +184,7 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 		m.Content = content
 
 		return nil
-	}
-
-	if partial.ContentType == "message/rfc822" {
+	case "message/rfc822":
 		var content MessagePartMultipleRFC822
 
 		err := json.Unmarshal(partial.Content, &content)
@@ -197,9 +195,7 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 		m.Content = content
 
 		return nil
-	}
-
-	if partial.ContentType == "multipart/alternative" {
+	case "multipart/alternative":
 		var content MessagePartMultipartAlternative
 
 		err := json.Unmarshal(partial.Content, &content)
@@ -209,6 +205,10 @@ func (m *MessagePart) UnmarshalJSON(data []byte) error {
 
 		m.Content = content
 
+		return nil
+	case "image/jpeg":
+		log.Println("skipping image")
+		m.Content = nil
 		return nil
 	}
 
