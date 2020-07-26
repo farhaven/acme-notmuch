@@ -130,6 +130,10 @@ func (m MessagePart) Render() string {
 		return "Attachment: " + m.Filename
 	}
 
+	if m.Content == nil {
+		return ""
+	}
+
 	return m.Content.Render()
 }
 
