@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/mail"
 	"os/exec"
 	"strings"
@@ -18,7 +17,7 @@ import (
 )
 
 // nextUnread returns the message ID of the next unread message in the same thread as id
-func nextUnread(wg *sync.WaitGroup, id string) error {
+func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
 	// Get thread ID of the given message
 	// TODO: Handle multiple threads
 
@@ -59,7 +58,7 @@ func nextUnread(wg *sync.WaitGroup, id string) error {
 	foundNextMsg := false
 	for idx, entry := range l {
 		if entry.MsgID == id {
-			log.Println("found message", id, "at index", idx)
+			win.Errf("found message %d at index", id, idx)
 			foundThisMsg = true
 			continue
 		}
@@ -69,7 +68,7 @@ func nextUnread(wg *sync.WaitGroup, id string) error {
 		}
 
 		if entry.Tags["unread"] {
-			log.Println("next unread message is:", entry.MsgID, "at", idx)
+			win.Errf("next unread message is: %s at %d", entry.MsgID, idx)
 			wg.Add(1)
 			go displayMessage(wg, entry.MsgID)
 			foundNextMsg = true
@@ -188,22 +187,22 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	defer wg.Done()
 
-	win, err := newWin("Mail/message/" + messageID)
+	win, err := newWin("/Mail/message/" + messageID)
 	if err != nil {
-		log.Printf("can't open message display window for %s: %s", messageID, err)
+		win.Errf("can't open message display window for %s: %s", messageID, err)
 		return
 	}
 
-	err = win.Fprintf("tag", "Next ")
+	err = win.Fprintf("tag", "Next Reply ")
 	if err != nil {
-		log.Printf("can't write to tag: %s", err)
+		win.Errf("can't write to tag: %s", err)
 		return
 
 	}
 
 	err = win.Fprintf("data", "Looking for message %s", messageID)
 	if err != nil {
-		log.Printf("can't write to body: %s", err)
+		win.Errf("can't write to body: %s", err)
 		return
 	}
 
@@ -214,32 +213,32 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("can't load message payload: %s", err)
+		win.Errf("can't load message payload: %s", err)
 		return
 	}
 
 	var msg message.Root
 	err = json.Unmarshal(output, &msg)
 	if err != nil {
-		log.Printf("can't decode message: raw=%s %s", output, err)
+		win.Errf("can't decode message: raw=%s %s", output, err)
 		return
 	}
 
 	err = writeMessageHeaders(win, msg)
 	if err != nil {
-		log.Printf("can't write headers for %q: %s", messageID, err)
+		win.Errf("can't write headers for %q: %s", messageID, err)
 		return
 	}
 
 	err = win.Fprintf("body", "\n%s", msg.Render())
 	if err != nil {
-		log.Printf("can't write message body: %s", err)
+		win.Errf("can't write message body: %s", err)
 		return
 	}
 
 	err = winClean(win)
 	if err != nil {
-		log.Printf("can't clean window state: %s", err)
+		win.Errf("can't clean window state: %s", err)
 		return
 	}
 
@@ -248,34 +247,42 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		// x and X go right back to acme
 		switch evt.C2 {
 		case 'x', 'X':
-			if string(evt.Text) == "Next" {
-				log.Println("got Next command")
-				err := nextUnread(wg, messageID)
+			switch string(evt.Text) {
+			case "Next":
+				win.Err("got Next command")
+				err := nextUnread(wg, win, messageID)
 				if err != nil {
-					log.Printf("can't jump to next unread message: %s", err)
+					win.Errf("can't jump to next unread message: %s", err)
+				}
+				continue
+			case "Reply":
+				win.Errf("got Reply command for message %s", messageID)
+				err := composeReply(wg, win, messageID)
+				if err != nil {
+					win.Errf("can't compose reply: %s", err)
 				}
 				continue
 			}
 
-			err := handleQueryEvent(wg, evt)
+			err := handleCommand(wg, win, evt)
 			switch err {
 			case nil:
 				// Nothing to do, event already handled
-			case errNotAQuery:
+			case errNotACommand:
 				// Let ACME handle the event
 				err := win.WriteEvent(evt)
 				if err != nil {
 					return
 				}
 			default:
-				log.Printf("can't handle event: %s", err)
+				win.Errf("can't handle event: %s", err)
 			}
 
 			continue
 		case 'l', 'L':
 			err := win.WriteEvent(evt)
 			if err != nil {
-				log.Printf("can't write event: %s", err)
+				win.Errf("can't write event: %s", err)
 				return
 			}
 

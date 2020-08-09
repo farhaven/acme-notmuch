@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/mail"
 	"os/exec"
 	"strconv"
@@ -49,7 +48,7 @@ type TagSet struct {
 
 type ThreadEntry interface {
 	// Tree renders a tread entry of the given level as a list of strings. It places message IDs in the given IDMap.
-	Tree(int, *IDMap) []string
+	Tree(int, *IDMap) ([]string, error)
 
 	// PreOrder returns a traversal of the thread entry in pre-order.
 	PreOrder() []TagSet
@@ -58,14 +57,19 @@ type ThreadEntry interface {
 // A thread is a list of child threads or messages
 type Thread []ThreadEntry
 
-func (t Thread) Tree(indent int, m *IDMap) []string {
+func (t Thread) Tree(indent int, m *IDMap) ([]string, error) {
 	var entries []string
 
 	for _, e := range t {
-		entries = append(entries, e.Tree(indent+1, m)...)
+		child, err := e.Tree(indent+1, m)
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, child...)
 	}
 
-	return entries
+	return entries, nil
 }
 
 func (t *Thread) UnmarshalJSON(data []byte) error {
@@ -131,7 +135,7 @@ type ThreadMessage struct {
 	Headers      map[string]string
 }
 
-func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
+func (t ThreadMessage) Tree(indent int, m *IDMap) ([]string, error) {
 	subject := t.Headers["Subject"]
 	if len(subject) > _maxSubjectLen {
 		subject = subject[:_maxSubjectLen] + "..."
@@ -140,12 +144,11 @@ func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
 	is := strings.Repeat(" ", indent)
 
 	id := m.Put(t.ID)
-	log.Println("msg id:", id, t.ID, "indent:", indent)
 
 	mailFrom := t.Headers["From"]
 	fromAddr, err := mail.ParseAddress(mailFrom)
 	if err != nil {
-		log.Printf("can't parse From header %q: %s", mailFrom, err)
+		return nil, fmt.Errorf("can't parse From header %q: %w", mailFrom, err)
 	} else {
 		if fromAddr.Name != "" {
 			mailFrom = fromAddr.Name
@@ -158,9 +161,7 @@ func (t ThreadMessage) Tree(indent int, m *IDMap) []string {
 		id + "\t" + is + subject + "\t" + "(" + mailFrom + ")\t" + fmt.Sprintf("%v", t.Tags),
 	}
 
-	log.Println("res", res)
-
-	return res
+	return res, nil
 }
 
 func (t ThreadMessage) PreOrder() []TagSet {
@@ -178,15 +179,15 @@ func (t ThreadMessage) PreOrder() []TagSet {
 func displayThread(wg *sync.WaitGroup, threadID string) {
 	defer wg.Done()
 
-	win, err := newWin("Mail/thread/" + threadID)
+	win, err := newWin("/Mail/thread/" + threadID)
 	if err != nil {
-		log.Printf("can't open thread display window for %s: %s", threadID, err)
+		win.Errf("can't open thread display window for %s: %s", threadID, err)
 		return
 	}
 
 	err = win.Fprintf("data", "Looking for thread %s", threadID)
 	if err != nil {
-		log.Printf("can't write to body: %s", err)
+		win.Errf("can't write to body: %s", err)
 		return
 	}
 
@@ -194,7 +195,7 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("can't get thread %s: %s", threadID, err)
+		win.Errf("can't get thread %s: %s", threadID, err)
 		return
 	}
 
@@ -202,7 +203,7 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	err = json.Unmarshal(output, &thread)
 	if err != nil {
-		log.Printf("can't unmarshal thread %s: %s", threadID, err)
+		win.Errf("can't unmarshal thread %s: %s", threadID, err)
 		return
 	}
 
@@ -210,13 +211,18 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	idMap := IDMap{Prefix: "msg_"}
 
-	entries := thread.Tree(0, &idMap)
+	entries, err := thread.Tree(0, &idMap)
+	if err != nil {
+		win.Errf("can't render thread: %s", err)
+		return
+	}
+
 	// longestcommon.TrimPrefix(entries)
 	win.PrintTabbed(strings.Join(entries, "\n"))
 
 	err = winClean(win)
 	if err != nil {
-		log.Printf("can't clean window state: %s", err)
+		win.Errf("can't clean window state: %s", err)
 		return
 	}
 
@@ -226,18 +232,18 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		switch evt.C2 {
 		case 'l', 'L':
 		case 'x', 'X':
-			err := handleQueryEvent(wg, evt)
+			err := handleCommand(wg, win, evt)
 			switch err {
 			case nil:
 				// Nothing to do, event already handled
-			case errNotAQuery:
+			case errNotACommand:
 				// Let ACME handle the event
 				err := win.WriteEvent(evt)
 				if err != nil {
 					return
 				}
 			default:
-				log.Printf("can't handle event: %s", err)
+				win.Errf("can't handle event: %s", err)
 			}
 
 			continue
@@ -245,24 +251,22 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 			continue
 		}
 
-		log.Printf("got 'Look' event: %q", evt.Text)
-
 		// Match message IDs
 		id := string(bytes.Trim(evt.Text, " \r\t\n"))
 
-		log.Printf("looking for id %q", id)
+		win.Errf("looking for id %q", id)
 
 		if !strings.HasPrefix(id, idMap.Prefix) {
 			// Doesn't look like a thread ID, send it back to ACME
 			err := win.WriteEvent(evt)
 			if err != nil {
-				log.Printf("can't write event: %s", err)
+				win.Errf("can't write event: %s", err)
 				return
 			}
 			continue
 		}
 
-		log.Println("looking up message ID")
+		win.Err("looking up message ID")
 
 		// Get message ID. If we don't have any, push the event back to ACME
 		id, err := idMap.Get(id)
@@ -270,7 +274,7 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 			// Doesn't look like a thread ID, send it back to ACME
 			err := win.WriteEvent(evt)
 			if err != nil {
-				log.Printf("can't write event: %s", err)
+				win.Errf("can't write event: %s", err)
 				return
 			}
 			continue

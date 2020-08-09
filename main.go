@@ -51,7 +51,7 @@ func newWin(name string) (*acme.Win, error) {
 		return nil, err
 	}
 
-	err = win.Fprintf("tag", "Query ")
+	err = win.Fprintf("tag", "Query Compose ")
 	if err != nil {
 		return nil, err
 	}
@@ -84,47 +84,49 @@ func winClean(win *acme.Win) error {
 	return nil
 }
 
-var errNotAQuery = errors.New("not a query event")
+var errNotACommand = errors.New("not a command event")
 
-func handleQueryEvent(wg *sync.WaitGroup, evt *acme.Event) error {
+func handleCommand(wg *sync.WaitGroup, win *acme.Win, evt *acme.Event) error {
 	cmd := strings.TrimSpace(string(evt.Text))
 	arg := strings.TrimSpace(string(evt.Arg))
 
-	log.Printf("cmd: %q, arg: %q", cmd, arg)
+	win.Errf("cmd: %q, arg: %q", cmd, arg)
 
-	if cmd != "Query" && !strings.HasPrefix(cmd, "Query ") {
-		return errNotAQuery
-	}
+	switch {
+	case cmd == "Query" || strings.HasPrefix(cmd, "Query "):
+		win.Err("discovering args")
 
-	log.Println("discovering args")
+		if arg == "" {
+			parts := strings.SplitN(cmd, " ", 2)
+			win.Errf("parts: %#v", parts)
 
-	if arg == "" {
-		parts := strings.SplitN(cmd, " ", 2)
-		log.Printf("parts: %#v", parts)
+			if len(parts) != 2 {
+				return errNotACommand
+			}
 
-		if len(parts) != 2 {
-			return errNotAQuery
+			arg = parts[1]
 		}
 
-		arg = parts[1]
+		win.Errf("got arg: %q", arg)
+
+		go func() {
+			err := displayQueryResult(wg, arg)
+			if err != nil {
+				win.Errf("can't display query results for %q: %s", arg, err)
+			}
+		}()
+
+		return nil
+	case cmd == "Compose":
+		wg.Add(1)
+		go composeMessage(wg, newMailTemplate)
 	}
 
-	log.Printf("got arg: %q", arg)
-
-	go func() {
-		err := displayQueryResult(wg, arg)
-		if err != nil {
-			log.Printf("can't display query results for %q: %s", arg, err)
-		}
-	}()
-
-	return nil
+	return errNotACommand
 }
 
 func main() {
 	flag.Parse()
-
-	log.Println("here we go")
 
 	var wg sync.WaitGroup
 	wg.Add(1)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -40,7 +39,7 @@ var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
 func displayQueryResult(wg *sync.WaitGroup, query string) error {
 	defer wg.Done()
 
-	win, err := newWin("Mail/query")
+	win, err := newWin("/Mail/query")
 	if err != nil {
 		return err
 	}
@@ -81,26 +80,24 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		switch evt.C2 {
 		case 'l', 'L':
 		case 'x', 'X':
-			err := handleQueryEvent(wg, evt)
+			err := handleCommand(wg, win, evt)
 			switch err {
 			case nil:
 				// Nothing to do, event already handled
-			case errNotAQuery:
+			case errNotACommand:
 				// Let ACME handle the event
 				err := win.WriteEvent(evt)
 				if err != nil {
 					return err
 				}
 			default:
-				log.Printf("can't handle event: %s", err)
+				win.Errf("can't handle event: %s", err)
 			}
 
 			continue
 		default:
 			continue
 		}
-
-		log.Printf("got 'Look' event: %q", evt.Text)
 
 		// Match thread IDs: Sequence of 16 hex digits, followed by optional whitespace
 		id := bytes.Trim(evt.Text, " \r\t\n")
