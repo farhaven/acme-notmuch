@@ -10,11 +10,8 @@ package main
 		- also removes tag:unread from the message
 		- somehow make attachments visible
 			- handle multipart messages
-		- pass html mail through lynx?
-			- via plumber?
 		- handle GPG and S/MIME
 		- "Next in thread" command
-- use notmuch command line tools to do the heavy lifting, with JSON output
 - one window per $thing: main view (unread mail), query list, results of query
 	- "view thread" is just result of query
 	- main view also result of "default" query for `tag:unread`
@@ -23,8 +20,6 @@ package main
 	- special case of tagging
 - send using msmtp
 - window tag shows query used to create window?
-- runs until last window is closed
-- starts with single window
 */
 
 import (
