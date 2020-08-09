@@ -109,6 +109,8 @@ func handleCommand(wg *sync.WaitGroup, win *acme.Win, evt *acme.Event) error {
 
 	switch {
 	case cmd == "Query":
+		wg.Add(1)
+
 		go func() {
 			err := displayQueryResult(wg, arg)
 			if err != nil {
