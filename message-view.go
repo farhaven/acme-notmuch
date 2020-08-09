@@ -82,7 +82,7 @@ func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
 	foundNextMsg := false
 	for idx, entry := range l {
 		if entry.MsgID == id {
-			win.Errf("found message %d at index", id, idx)
+			win.Errf("found message %s at index %d", id, idx)
 			foundThisMsg = true
 			continue
 		}
