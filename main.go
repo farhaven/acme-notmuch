@@ -18,7 +18,6 @@ package main
 	- "read mail": result of notmuch show?, except that it also removes the "unread" tag
 - "delete" just adds a "deleted" tag
 	- special case of tagging
-- send using msmtp
 - window tag shows query used to create window?
 */
 

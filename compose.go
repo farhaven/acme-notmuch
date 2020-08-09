@@ -10,6 +10,17 @@ import (
 	"9fans.net/go/acme"
 )
 
+/* TODO:
+- Add attachments to messages
+	- Take a page from Mail's book: references to files end up as included, e.g. !attach /path/to/file at the beginning of a line?
+	- Make "Attachments" a separate window?
+	- Just a list of files to attach?
+- Read ~/.signature
+- Allow specifying the mail template somehow
+- Sanity check mail:
+	- check for attachments on things like "i have attached..."
+*/
+
 const newMailTemplate = `From:
 To:
 Subject:

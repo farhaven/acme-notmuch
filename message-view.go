@@ -42,8 +42,7 @@ func tagMessage(tags string, messageID string) error {
 
 // nextUnread returns the message ID of the next unread message in the same thread as id
 func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
-	// Get thread ID of the given message
-	// TODO: Handle multiple threads
+	// TODO: Handle multiple threads?
 
 	cmd := exec.Command("notmuch", "search", "--format=json", "--output=threads", "id:"+id)
 	output, err := cmd.CombinedOutput()
@@ -242,7 +241,6 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 	//   - opens a new window with the attachments (MIME parts) listed, allows saving them somewhere
 	//   - Decode base64
 	// - Add "Headers" command to show full list of headers
-	// - Remove "unread" tag from messages
 
 	defer wg.Done()
 
