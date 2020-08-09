@@ -86,29 +86,32 @@ func winClean(win *acme.Win) error {
 
 var errNotACommand = errors.New("not a command event")
 
-func handleCommand(wg *sync.WaitGroup, win *acme.Win, evt *acme.Event) error {
+func getCommandArgs(evt *acme.Event) (string, string) {
 	cmd := strings.TrimSpace(string(evt.Text))
 	arg := strings.TrimSpace(string(evt.Arg))
+
+	if arg == "" {
+		parts := strings.SplitN(cmd, " ", 2)
+
+		if len(parts) != 2 {
+			arg = ""
+		} else {
+			arg = parts[1]
+		}
+
+		cmd = strings.TrimSpace(parts[0])
+	}
+
+	return cmd, arg
+}
+
+func handleCommand(wg *sync.WaitGroup, win *acme.Win, evt *acme.Event) error {
+	cmd, arg := getCommandArgs(evt)
 
 	win.Errf("cmd: %q, arg: %q", cmd, arg)
 
 	switch {
-	case cmd == "Query" || strings.HasPrefix(cmd, "Query "):
-		win.Err("discovering args")
-
-		if arg == "" {
-			parts := strings.SplitN(cmd, " ", 2)
-			win.Errf("parts: %#v", parts)
-
-			if len(parts) != 2 {
-				return errNotACommand
-			}
-
-			arg = parts[1]
-		}
-
-		win.Errf("got arg: %q", arg)
-
+	case cmd == "Query":
 		go func() {
 			err := displayQueryResult(wg, arg)
 			if err != nil {

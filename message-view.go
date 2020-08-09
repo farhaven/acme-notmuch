@@ -16,6 +16,30 @@ import (
 	"github.com/farhaven/acme-notmuch/message"
 )
 
+// Set to false to disable removal of "unread" tag on message open
+const _removeUnreadTag = true
+
+func tagMessage(tags string, messageID string) error {
+	args := []string{
+		"tag",
+	}
+
+	args = append(args, strings.Fields(tags)...)
+
+	args = append(args, []string{
+		"--",
+		"id:" + messageID,
+	}...)
+
+	cmd := exec.Command("notmuch", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("can't set tags: %q, %w", output, err)
+	}
+
+	return nil
+}
+
 // nextUnread returns the message ID of the next unread message in the same thread as id
 func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
 	// Get thread ID of the given message
@@ -177,6 +201,41 @@ func writeMessageHeaders(win *acme.Win, msg message.Root) error {
 	return nil
 }
 
+func refreshMessage(messageID string, win *acme.Win) error {
+	// TODO: Decode PGP
+	cmd := exec.Command("notmuch", "show", "--decrypt=true", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("loading payload: %w", err)
+	}
+
+	var msg message.Root
+	err = json.Unmarshal(output, &msg)
+	if err != nil {
+		return fmt.Errorf("decoding message: raw=%s %w", output, err)
+	}
+
+	win.Clear()
+
+	err = writeMessageHeaders(win, msg)
+	if err != nil {
+		return fmt.Errorf("writing headers for %q: %w", messageID, err)
+	}
+
+	err = win.Fprintf("body", "\n%s", msg.Render())
+	if err != nil {
+		return fmt.Errorf("writing message body: %w", err)
+	}
+
+	err = winClean(win)
+	if err != nil {
+		return fmt.Errorf("cleaning window state: %w", err)
+	}
+
+	return nil
+}
+
 func displayMessage(wg *sync.WaitGroup, messageID string) {
 	// TODO:
 	// - "Attachments" command
@@ -193,7 +252,7 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		return
 	}
 
-	err = win.Fprintf("tag", "Next Reply ")
+	err = win.Fprintf("tag", "Next Reply [Tag +flagged]")
 	if err != nil {
 		win.Errf("can't write to tag: %s", err)
 		return
@@ -206,40 +265,18 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		return
 	}
 
-	win.Clear()
-
-	// TODO: Decode PGP
-	cmd := exec.Command("notmuch", "show", "--decrypt=true", "--format=json", "--entire-thread=false", "--include-html", "id:"+messageID)
-
-	output, err := cmd.Output()
+	err = refreshMessage(messageID, win)
 	if err != nil {
-		win.Errf("can't load message payload: %s", err)
+		win.Errf("can't refresh message: %s", err)
 		return
 	}
 
-	var msg message.Root
-	err = json.Unmarshal(output, &msg)
-	if err != nil {
-		win.Errf("can't decode message: raw=%s %s", output, err)
-		return
-	}
-
-	err = writeMessageHeaders(win, msg)
-	if err != nil {
-		win.Errf("can't write headers for %q: %s", messageID, err)
-		return
-	}
-
-	err = win.Fprintf("body", "\n%s", msg.Render())
-	if err != nil {
-		win.Errf("can't write message body: %s", err)
-		return
-	}
-
-	err = winClean(win)
-	if err != nil {
-		win.Errf("can't clean window state: %s", err)
-		return
+	if _removeUnreadTag {
+		err = tagMessage("-unread", messageID)
+		if err != nil {
+			win.Errf("can't remove 'unread' tag from message %s", messageID)
+			return
+		}
 	}
 
 	for evt := range win.EventChan() {
@@ -247,7 +284,9 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 		// x and X go right back to acme
 		switch evt.C2 {
 		case 'x', 'X':
-			switch string(evt.Text) {
+			cmd, arg := getCommandArgs(evt)
+
+			switch cmd {
 			case "Next":
 				win.Err("got Next command")
 				err := nextUnread(wg, win, messageID)
@@ -261,6 +300,20 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 				if err != nil {
 					win.Errf("can't compose reply: %s", err)
 				}
+				continue
+			case "Tag":
+				win.Errf("got Tag command with args: %q", arg)
+				err := tagMessage(arg, messageID)
+				if err != nil {
+					win.Errf("can't update tags: %s", err)
+				}
+
+				err = refreshMessage(messageID, win)
+				if err != nil {
+					win.Errf("can't refresh message: %s", err)
+					return
+				}
+
 				continue
 			}
 
