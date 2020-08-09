@@ -33,8 +33,6 @@ func sendMessage(win *acme.Win) error {
 		return err
 	}
 
-	win.Errf("Sending message with body:\n\n%s\n\nnow", body)
-
 	cmd := exec.Command("msmtp", "--read-recipients", "--read-envelope-from")
 	cmd.Stdin = bytes.NewBuffer(body)
 
@@ -75,9 +73,7 @@ func composeMessage(wg *sync.WaitGroup, initialText string) {
 		return
 	}
 
-	win.Err("Starting message compose")
-
-	err = win.Fprintf("tag", "Send ")
+	err = win.Fprintf("tag", "Send |fmt ")
 	if err != nil {
 		win.Errf("can't update tag: %s", err)
 		return
@@ -107,7 +103,6 @@ func composeMessage(wg *sync.WaitGroup, initialText string) {
 					win.Err("message sent")
 				}
 			default:
-				win.Errf("exec event: %q", evt.Text)
 				err := win.WriteEvent(evt)
 				if err != nil {
 					win.Errf("can't write window event: %s", err)

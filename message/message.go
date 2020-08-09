@@ -124,8 +124,6 @@ type MessagePart struct {
 }
 
 func (m MessagePart) Render() string {
-	log.Println("TODO: Render content type")
-
 	if m.ContentDisposition == "attachment" {
 		return "Attachment: " + m.Filename
 	}

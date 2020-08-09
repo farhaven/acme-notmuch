@@ -254,8 +254,6 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 		// Match message IDs
 		id := string(bytes.Trim(evt.Text, " \r\t\n"))
 
-		win.Errf("looking for id %q", id)
-
 		if !strings.HasPrefix(id, idMap.Prefix) {
 			// Doesn't look like a thread ID, send it back to ACME
 			err := win.WriteEvent(evt)
@@ -265,8 +263,6 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 			}
 			continue
 		}
-
-		win.Err("looking up message ID")
 
 		// Get message ID. If we don't have any, push the event back to ACME
 		id, err := idMap.Get(id)

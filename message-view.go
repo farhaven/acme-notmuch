@@ -79,9 +79,8 @@ func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
 
 	foundThisMsg := false
 	foundNextMsg := false
-	for idx, entry := range l {
+	for _, entry := range l {
 		if entry.MsgID == id {
-			win.Errf("found message %s at index %d", id, idx)
 			foundThisMsg = true
 			continue
 		}
@@ -91,7 +90,6 @@ func nextUnread(wg *sync.WaitGroup, win *acme.Win, id string) error {
 		}
 
 		if entry.Tags["unread"] {
-			win.Errf("next unread message is: %s at %d", entry.MsgID, idx)
 			wg.Add(1)
 			go displayMessage(wg, entry.MsgID)
 			foundNextMsg = true
@@ -286,21 +284,18 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 			switch cmd {
 			case "Next":
-				win.Err("got Next command")
 				err := nextUnread(wg, win, messageID)
 				if err != nil {
 					win.Errf("can't jump to next unread message: %s", err)
 				}
 				continue
 			case "Reply":
-				win.Errf("got Reply command for message %s", messageID)
 				err := composeReply(wg, win, messageID)
 				if err != nil {
 					win.Errf("can't compose reply: %s", err)
 				}
 				continue
 			case "Tag":
-				win.Errf("got Tag command with args: %q", arg)
 				err := tagMessage(arg, messageID)
 				if err != nil {
 					win.Errf("can't update tags: %s", err)

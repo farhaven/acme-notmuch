@@ -107,8 +107,6 @@ func getCommandArgs(evt *acme.Event) (string, string) {
 func handleCommand(wg *sync.WaitGroup, win *acme.Win, evt *acme.Event) error {
 	cmd, arg := getCommandArgs(evt)
 
-	win.Errf("cmd: %q, arg: %q", cmd, arg)
-
 	switch {
 	case cmd == "Query":
 		go func() {

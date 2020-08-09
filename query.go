@@ -90,8 +90,6 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 				if err != nil {
 					return err
 				}
-			default:
-				win.Errf("can't handle event: %s", err)
 			}
 
 			continue
