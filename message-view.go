@@ -242,7 +242,7 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	defer wg.Done()
 
-	win, err := newWin("/Mail/message/"+messageID, "Next Reply [Tag +flagged] ")
+	win, err := newWin("/Mail/message/"+messageID, "Next Reply [Tag +flagged] [|fmt -w 120]")
 	if err != nil {
 		win.Errf("can't open message display window for %s: %s", messageID, err)
 		return
