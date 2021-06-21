@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"9fans.net/go/acme"
 )
 
 const _maxSubjectLen = 60
@@ -32,19 +34,10 @@ func (q QueryResult) String() string {
 	return fmt.Sprintf("%s\t(%d/%d)\t%s\t%v", q.Thread, q.Matched, q.Total, subject, q.Tags)
 }
 
-// Thread ID: sequence of 16 hex digits
-var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
+func refreshQueryResult(win *acme.Win, query string) error {
+	win.Clear()
 
-// displayQueryResult opens a new window that shows the results of query
-func displayQueryResult(wg *sync.WaitGroup, query string) error {
-	defer wg.Done()
-
-	win, err := newWin("/Mail/query", "TODO")
-	if err != nil {
-		return err
-	}
-
-	err = win.Fprintf("data", "Results of query %q\n\n", query)
+	err := win.Fprintf("data", "Results of query %q\n\n", query)
 	if err != nil {
 		return err
 	}
@@ -74,12 +67,41 @@ func displayQueryResult(wg *sync.WaitGroup, query string) error {
 		return err
 	}
 
+	return nil
+}
+
+// Thread ID: sequence of 16 hex digits
+var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
+
+// displayQueryResult opens a new window that shows the results of query
+func displayQueryResult(wg *sync.WaitGroup, query string) error {
+	defer wg.Done()
+
+	win, err := newWin("/Mail/query", "Get")
+	if err != nil {
+		return err
+	}
+
+	err = refreshQueryResult(win, query)
+	if err != nil {
+		return err
+	}
+
 	for evt := range win.EventChan() {
 		// Only listen to l and L events to catch right click on a thread ID
 		// x and X go right back to acme
 		switch evt.C2 {
 		case 'l', 'L':
 		case 'x', 'X':
+			if string(evt.Text) == "Get" {
+				err = refreshQueryResult(win, query)
+				if err != nil {
+					win.Errf("can't refresh query window: %s", err)
+				}
+
+				continue
+			}
+
 			err := handleCommand(wg, win, evt)
 			switch err {
 			case nil:
