@@ -45,7 +45,7 @@ func newWin(name, tag string) (*acme.Win, error) {
 		return nil, err
 	}
 
-	err = win.Name(name)
+	err = win.Name("%s", name)
 	if err != nil {
 		return nil, err
 	}
