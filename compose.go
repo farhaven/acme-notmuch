@@ -67,7 +67,7 @@ func composeReply(wg *sync.WaitGroup, win *acme.Win, messageID string) error {
 func composeMessage(wg *sync.WaitGroup, initialText string) {
 	defer wg.Done()
 
-	win, err := newWin("/Mail/newMessage")
+	win, err := newWin("/Mail/newMessage", "TODO")
 	if err != nil {
 		log.Printf("can't create window: %s", err)
 		return

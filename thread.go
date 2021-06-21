@@ -1,14 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/mail"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+
+	"9fans.net/go/acme"
 )
 
 // IDMap is used to map message IDs to shorter identifier strings and back.
@@ -176,35 +178,24 @@ func (t ThreadMessage) PreOrder() []TagSet {
 	}
 }
 
-func displayThread(wg *sync.WaitGroup, threadID string) {
-	defer wg.Done()
-
-	win, err := newWin("/Mail/thread/" + threadID)
+func refreshThread(win *acme.Win, threadID string) (IDMap, error) {
+	err := win.Fprintf("data", "Looking for thread %s", threadID)
 	if err != nil {
-		win.Errf("can't open thread display window for %s: %s", threadID, err)
-		return
-	}
-
-	err = win.Fprintf("data", "Looking for thread %s", threadID)
-	if err != nil {
-		win.Errf("can't write to body: %s", err)
-		return
+		return IDMap{}, err
 	}
 
 	cmd := exec.Command("notmuch", "show", "--body=false", "--format=json", "thread:"+threadID)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		win.Errf("can't get thread %s: %s", threadID, err)
-		return
+		return IDMap{}, fmt.Errorf("getting output from notmuch: %w", err)
 	}
 
 	var thread Thread
 
 	err = json.Unmarshal(output, &thread)
 	if err != nil {
-		win.Errf("can't unmarshal thread %s: %s", threadID, err)
-		return
+		return IDMap{}, fmt.Errorf("unmarshaling thread %s: %w", threadID, err)
 	}
 
 	win.Clear()
@@ -213,8 +204,7 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	entries, err := thread.Tree(0, &idMap)
 	if err != nil {
-		win.Errf("can't render thread: %s", err)
-		return
+		return IDMap{}, fmt.Errorf("rendering thread %s: %w", threadID, err)
 	}
 
 	// longestcommon.TrimPrefix(entries)
@@ -222,62 +212,130 @@ func displayThread(wg *sync.WaitGroup, threadID string) {
 
 	err = winClean(win)
 	if err != nil {
-		win.Errf("can't clean window state: %s", err)
+		return IDMap{}, fmt.Errorf("cleaning window state: %w", err)
+	}
+
+	return idMap, nil
+}
+
+var errNoMessage = errors.New("no such message")
+
+// Handle 'look' command or event with given text. Returns an error if the given text does not match a
+// message ID and the event that this look was called for should be sent back to Acme
+func look(wg *sync.WaitGroup, win *acme.Win, ids IDMap, text string) error {
+	id := strings.Trim(text, " \r\t\n")
+
+	if !strings.HasPrefix(id, ids.Prefix) {
+		return errNoMessage
+	}
+
+	// Get message ID. If we don't have any, push the event back to ACME
+	id, err := ids.Get(id)
+	if err != nil {
+		return errNoMessage
+	}
+
+	wg.Add(1)
+	// Open thread in new window
+	go displayMessage(wg, string(id))
+
+	return nil
+}
+
+func displayThread(wg *sync.WaitGroup, threadID string) {
+	defer wg.Done()
+
+	win, err := newWin("/Mail/thread/"+threadID, "Get")
+	if err != nil {
+		win.Errf("can't open thread display window for %s: %s", threadID, err)
 		return
 	}
 
+	idMap, err := refreshThread(win, threadID)
+	if err != nil {
+		win.Errf("can't refresh thread display for %s: %s", threadID, err)
+		return
+	}
+
+	// Events:
+	// - l/L:
+	//   - look up message with id in evt.Text
+	// Commands:
+	// - Look:
+	//   - show message for ID under cursor (msg_XYZ) (-> evt.Loc)
+	//   - or run regular Acme Look command if not on message ID
+	// - Get: refresh thread view
+
 	for evt := range win.EventChan() {
-		// Only listen to l and L events to catch right click on a thread ID
-		// x and X go right back to acme
+		var (
+			doLook   bool
+			lookText string
+		)
+
 		switch evt.C2 {
-		case 'l', 'L':
 		case 'x', 'X':
-			err := handleCommand(wg, win, evt)
-			switch err {
-			case nil:
-				// Nothing to do, event already handled
-			case errNotACommand:
+			switch string(evt.Text) {
+			case "Get":
+				idMap, err = refreshThread(win, threadID)
+				if err != nil {
+					win.Errf("can't refresh thread display for %s: %s", threadID, err)
+				}
+				continue
+			case "Look":
+				doLook = true
+				if string(evt.Loc) != "" {
+					floc := strings.Split(string(evt.Loc), ":")
+					if len(floc) != 2 {
+						win.Errf("weird location: %q", evt.Loc)
+						continue
+					}
+
+					err = win.Addr(floc[1])
+					if err != nil {
+						win.Errf("can't set address: %s", err)
+						continue
+					}
+
+					data, err := win.ReadAll("xdata")
+					if err != nil {
+						win.Errf("can't read data: %s", err)
+					}
+
+					lookText = string(data)
+				} else {
+					lookText = win.Selection()
+				}
+			default:
 				// Let ACME handle the event
 				err := win.WriteEvent(evt)
 				if err != nil {
+					win.Errf("can't write event: %s", err)
 					return
 				}
-			default:
-				win.Errf("can't handle event: %s", err)
 			}
+		case 'l', 'L':
+			doLook = true
+			lookText = string(evt.Text)
+		}
 
+		if !doLook {
+			// Let ACME handle the event
+			win.WriteEvent(evt)
 			continue
+		}
+
+		err := look(wg, win, idMap, lookText)
+		switch err {
+		case nil:
+		case errNoMessage:
+			// Doesn't look like a message ID, send it back to ACME
+			err := win.WriteEvent(evt)
+			if err != nil {
+				win.Errf("can't write event: %s", err)
+				continue
+			}
 		default:
-			continue
+			win.Errf("lookup failed: %s", err)
 		}
-
-		// Match message IDs
-		id := string(bytes.Trim(evt.Text, " \r\t\n"))
-
-		if !strings.HasPrefix(id, idMap.Prefix) {
-			// Doesn't look like a thread ID, send it back to ACME
-			err := win.WriteEvent(evt)
-			if err != nil {
-				win.Errf("can't write event: %s", err)
-				return
-			}
-			continue
-		}
-
-		// Get message ID. If we don't have any, push the event back to ACME
-		id, err := idMap.Get(id)
-		if err != nil {
-			// Doesn't look like a thread ID, send it back to ACME
-			err := win.WriteEvent(evt)
-			if err != nil {
-				win.Errf("can't write event: %s", err)
-				return
-			}
-			continue
-		}
-
-		wg.Add(1)
-		// Open thread in new window
-		go displayMessage(wg, string(id))
 	}
 }

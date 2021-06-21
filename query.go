@@ -39,7 +39,7 @@ var _threadIDRegex = regexp.MustCompile("[0-9a-f]{16}")
 func displayQueryResult(wg *sync.WaitGroup, query string) error {
 	defer wg.Done()
 
-	win, err := newWin("/Mail/query")
+	win, err := newWin("/Mail/query", "TODO")
 	if err != nil {
 		return err
 	}

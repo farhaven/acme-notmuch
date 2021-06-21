@@ -242,17 +242,10 @@ func displayMessage(wg *sync.WaitGroup, messageID string) {
 
 	defer wg.Done()
 
-	win, err := newWin("/Mail/message/" + messageID)
+	win, err := newWin("/Mail/message/"+messageID, "Next Reply [Tag +flagged] ")
 	if err != nil {
 		win.Errf("can't open message display window for %s: %s", messageID, err)
 		return
-	}
-
-	err = win.Fprintf("tag", "Next Reply [Tag +flagged]")
-	if err != nil {
-		win.Errf("can't write to tag: %s", err)
-		return
-
 	}
 
 	err = win.Fprintf("data", "Looking for message %s", messageID)

@@ -39,7 +39,7 @@ func init() {
 	flag.StringVar(&_query, "query", "tag:unread and not tag:openbsd", "initial query")
 }
 
-func newWin(name string) (*acme.Win, error) {
+func newWin(name, tag string) (*acme.Win, error) {
 	win, err := acme.New()
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func newWin(name string) (*acme.Win, error) {
 		return nil, err
 	}
 
-	err = win.Fprintf("tag", "Query Compose ")
+	err = win.Fprintf("tag", tag)
 	if err != nil {
 		return nil, err
 	}
